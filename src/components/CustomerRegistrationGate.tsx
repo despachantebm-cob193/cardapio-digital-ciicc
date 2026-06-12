@@ -283,7 +283,7 @@ export default function CustomerRegistrationGate({ onAccessGranted, onAdminAcces
               )}
 
               <p className="text-[10px] text-zinc-500 text-center">
-                Processado com segurança pelo ecossistema Google Firebase.
+                Processado por autenticação Google legada enquanto a migração para Supabase é validada.
               </p>
             </motion.div>
           ) : (

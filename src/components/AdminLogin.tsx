@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Lock, LogIn, ChevronRight, Eye, EyeOff } from 'lucide-react';
-import { loginWithGoogle, auth } from '../firebase';
+import { isSupabaseAuthConfigured, signInWithGoogle } from '../features/auth/supabaseAuthService';
 import { motion } from 'motion/react';
 
 interface AdminLoginProps {
@@ -13,6 +13,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
   const [showPin, setShowPin] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const supabaseAuthReady = isSupabaseAuthConfigured();
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,16 +25,19 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
   };
 
   const handleGoogleLogin = async () => {
+    if (!supabaseAuthReady) {
+      setError('Supabase Auth ainda não está configurado. Configure .env.local para habilitar o login Google.');
+      return;
+    }
+
     setGoogleLoading(true);
     setError(null);
+
     try {
-      await loginWithGoogle();
-      // Google Login succeeded. In Firestore rules, any verified sign-in can edit for easy testing.
-      onLoginSuccess();
-    } catch (err: any) {
+      await signInWithGoogle();
+    } catch (err) {
       console.error(err);
-      setError('Falha ao autenticar com o Google. Use o PIN 1234 como alternativa!');
-    } finally {
+      setError('Falha ao iniciar login Google via Supabase Auth. Use o PIN 1234 como alternativa controlada.');
       setGoogleLoading(false);
     }
   };
@@ -116,7 +120,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
             type="button"
             id="google-signin-btn"
             onClick={handleGoogleLogin}
-            disabled={googleLoading}
+            disabled={googleLoading || !supabaseAuthReady}
             className="w-full py-4 bg-white border-2 border-zinc-200 hover:bg-zinc-50 hover:border-zinc-350 text-zinc-800 font-medium text-sm rounded-2xl cursor-pointer transition-all flex items-center justify-center gap-2 disabled:opacity-50"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -137,11 +141,19 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>{googleLoading ? 'Autenticando...' : 'Conectar com sua Conta Google'}</span>
+            <span>
+              {!supabaseAuthReady
+                ? 'Supabase Auth não configurado'
+                : googleLoading
+                  ? 'Redirecionando...'
+                  : 'Conectar com Google via Supabase'}
+            </span>
           </button>
 
           <p className="text-zinc-400 text-[11px] text-center px-4 leading-relaxed">
-            Ao conectar com o Google, suas alterações no cardápio de produtos persistirão com segurança no Firebase Firestore.
+            {supabaseAuthReady
+              ? 'O login Google será iniciado pelo Supabase Auth. O Firebase legado permanece ativo apenas para compatibilidade durante a validação.'
+              : 'Configure VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.local para habilitar o login Google via Supabase Auth.'}
           </p>
 
           {onBack && (

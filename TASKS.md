@@ -172,3 +172,42 @@ Data de início: 2026-06-12
 - PWA/offline real.
 - Deploy Vercel real.
 - Remoção abrupta do Firebase.
+
+
+## Fase 3 — Supabase Google Auth Flow
+
+Status: CONCLUIDA_TECNICAMENTE_AGUARDANDO_PR
+Branch: feat/fase-3-supabase-google-auth-flow
+Data de início: 2026-06-12
+
+### Concluído nesta fase
+
+- [x] Sincronizar main pós-merge da PR #3.
+- [x] Criar branch `feat/fase-3-supabase-google-auth-flow`.
+- [x] Auditar `App.tsx`, `AdminLogin`, `CustomerRegistrationGate` e fluxos atuais de autenticação.
+- [x] Integrar login Google via Supabase Auth no fluxo visual controlado do admin.
+- [x] Manter Firebase como legado ativo durante a transição.
+- [x] Neutralizar texto visual obsoleto diretamente ligado ao login Google.
+- [x] Validar `npm run lint`.
+- [x] Validar `npm run build`.
+- [x] Criar auditoria documental da Fase 3.
+
+### Pendente nesta fase
+
+- [ ] Abrir PR separada da Fase 3.
+
+### Fora de escopo mantido
+
+- Vendas.
+- Carrinho.
+- Checkout.
+- Estoque.
+- Lotes.
+- Pagamentos.
+- Comprovantes.
+- Migrations completas.
+- RLS final.
+- Storage.
+- PWA/offline real.
+- Deploy produção.
+- Remoção total do Firebase sem validação.

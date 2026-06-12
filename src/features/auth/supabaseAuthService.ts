@@ -1,10 +1,33 @@
+
 import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '../../lib/supabaseClient';
+import {
+  assertSupabaseEnv,
+  isSupabaseConfigured,
+  supabase,
+} from '../../lib/supabaseClient';
 
 export type AuthSession = Session;
 export type AuthUser = User;
 
+export function isSupabaseAuthConfigured() {
+  return isSupabaseConfigured();
+}
+
+function getSupabaseAuth() {
+  assertSupabaseEnv();
+
+  if (!supabase) {
+    throw new Error('Cliente Supabase indisponível. Verifique a configuração do ambiente.');
+  }
+
+  return supabase.auth;
+}
+
 export async function getCurrentSession() {
+  if (!isSupabaseAuthConfigured() || !supabase) {
+    return null;
+  }
+
   const { data, error } = await supabase.auth.getSession();
 
   if (error) {
@@ -15,7 +38,9 @@ export async function getCurrentSession() {
 }
 
 export async function signInWithGoogle() {
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  const auth = getSupabaseAuth();
+
+  const { data, error } = await auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: window.location.origin,
@@ -30,7 +55,8 @@ export async function signInWithGoogle() {
 }
 
 export async function signOutFromSupabase() {
-  const { error } = await supabase.auth.signOut();
+  const auth = getSupabaseAuth();
+  const { error } = await auth.signOut();
 
   if (error) {
     throw error;
@@ -40,6 +66,10 @@ export async function signOutFromSupabase() {
 export function onSupabaseAuthStateChange(
   callback: (session: AuthSession | null) => void,
 ) {
+  if (!isSupabaseAuthConfigured() || !supabase) {
+    return () => undefined;
+  }
+
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange((_event, session) => {

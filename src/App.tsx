@@ -7,6 +7,11 @@ import {
   CustomerRegistration
 } from './dbService';
 import { auth } from './firebase';
+import {
+  getCurrentSession,
+  onSupabaseAuthStateChange,
+  type AuthSession,
+} from './features/auth/supabaseAuthService';
 import { Product, StoreSetting } from './types';
 import CustomerView from './components/CustomerView';
 import AdminLogin from './components/AdminLogin';
@@ -65,7 +70,7 @@ export default function App() {
       }
     );
 
-    // 4. Trace if there is a persistent Google login credentials
+    // 4. Trace if there is a persistent Firebase Google login credentials
     const unsubscribeAuth = auth.onAuthStateChanged((user) => {
       if (user && user.emailVerified) {
         setAdminAuthenticated(true);
@@ -74,10 +79,26 @@ export default function App() {
       }
     });
 
+    // 5. Trace Supabase Auth session for the new controlled Google login flow
+    const handleSupabaseSession = (session: AuthSession | null) => {
+      if (session?.user) {
+        setAdminAuthenticated(true);
+      }
+    };
+
+    getCurrentSession()
+      .then(handleSupabaseSession)
+      .catch((err) => {
+        console.error('Falha ao verificar sessão Supabase Auth:', err);
+      });
+
+    const unsubscribeSupabaseAuth = onSupabaseAuthStateChange(handleSupabaseSession);
+
     return () => {
       unsubscribeSettings();
       unsubscribeProducts();
       unsubscribeAuth();
+      unsubscribeSupabaseAuth();
     };
   }, []);
 

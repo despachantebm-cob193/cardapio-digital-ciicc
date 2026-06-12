@@ -1,9 +1,10 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-function assertSupabaseEnv() {
+export function getMissingSupabaseEnvVars() {
   const missingVars: string[] = [];
 
   if (!supabaseUrl) {
@@ -14,6 +15,16 @@ function assertSupabaseEnv() {
     missingVars.push('VITE_SUPABASE_ANON_KEY');
   }
 
+  return missingVars;
+}
+
+export function isSupabaseConfigured() {
+  return getMissingSupabaseEnvVars().length === 0;
+}
+
+export function assertSupabaseEnv() {
+  const missingVars = getMissingSupabaseEnvVars();
+
   if (missingVars.length > 0) {
     throw new Error(
       `Variáveis de ambiente Supabase ausentes: ${missingVars.join(', ')}. Configure .env.local para ambiente local.`,
@@ -21,8 +32,8 @@ function assertSupabaseEnv() {
   }
 }
 
-assertSupabaseEnv();
+export const supabase = isSupabaseConfigured()
+  ? createClient(supabaseUrl as string, supabaseAnonKey as string)
+  : null;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-export type SupabaseClientInstance = typeof supabase;
+export type SupabaseClientInstance = NonNullable<typeof supabase>;
