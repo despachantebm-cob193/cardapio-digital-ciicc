@@ -23,7 +23,7 @@ Status: EM_ANDAMENTO
 - [x] Governanca inicial criada.
 - [x] TASKS inicial criado.
 - [x] PRD completo do MVP.
-- [ ] Arquitetura tecnica do MVP.
+- [x] Arquitetura tecnica do MVP.
 - [ ] Modelo de dados Supabase.
 - [ ] Criterios finais de aceite.
 - [ ] PR documental da Fase 0.
@@ -124,3 +124,4 @@ Status: NAO_INICIADA
 - Auth alvo: Google pelo Supabase.
 - Firebase atual: legado/prototipo a migrar.
 - PRD vigente: docs/PRD_MVP.md.
+- Arquitetura tecnica vigente: docs/TECHNICAL_ARCHITECTURE_MVP.md.
