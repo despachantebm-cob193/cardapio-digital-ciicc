@@ -1,7 +1,7 @@
 # TASKS — MVP Cardapio Digital CIICC
 
 Data: 2026-06-12
-Status geral: FASE_6_DOCUMENTAL_CONCLUIDA_AGUARDANDO_MERGE
+Status geral: FASE_7_VALIDACAO_PRIMEIRO_ADMIN_EM_ANDAMENTO
 
 Este arquivo acompanha a execucao do projeto por fases. Deve ser atualizado a cada novo chat, branch ou PR.
 
@@ -302,12 +302,13 @@ Base segura: 00e746e
 
 ## FASE 6 — Aplicar e validar Supabase Profiles/RLS no ambiente real
 
-Status: CONCLUIDA_DOCUMENTALMENTE_AGUARDANDO_MERGE
+Status: CONCLUIDA_E_MERGEADA
 
 Base:
 - Fase 5 concluída e mergeada na main;
 - main sincronizada em d7a7654;
-- branch criada: feat/fase-6-apply-validate-supabase-profiles-rls.
+- branch criada: feat/fase-6-apply-validate-supabase-profiles-rls;
+- PR #7 mergeada em 630a364.
 
 Concluído:
 - gate pós-Fase 5 executado;
@@ -324,9 +325,10 @@ Concluído:
 - validação final npm run lint registrada como OK;
 - validação final npm run build registrada como OK;
 - PR #7 aberta;
-- PR #7 validada no gate final.
+- PR #7 validada no gate final;
+- PR #7 mergeada.
 
-Pendente para próxima fase:
+Pendente transferido para Fase 7:
 - criar/validar primeiro admin manualmente sem versionar dados reais;
 - testar login Google admin;
 - testar bloqueio de usuário comum.
@@ -343,3 +345,50 @@ Fora de escopo mantido:
 - dashboard operacional;
 - fechamento diário;
 - remoção total do Firebase.
+
+## FASE 7A — Validação do primeiro admin e bloqueio de acessos
+
+Status: EM_ANDAMENTO
+
+Branch: feat/fase-7-validate-first-admin-access
+Base segura: 630a364
+
+### Objetivo
+
+Criar ou validar o primeiro profile admin manualmente no Supabase real, testar login Google como admin, testar bloqueio de usuário comum e registrar evidências sanitizadas.
+
+### Em andamento nesta fase
+
+- [x] Confirmar PR #7 mergeada.
+- [x] Criar branch `feat/fase-7-validate-first-admin-access`.
+- [x] Auditar relatório da Fase 6.
+- [x] Auditar migration `20260612180000_create_profiles_rls.sql`.
+- [x] Auditar fluxo frontend de sessão Supabase e profile admin.
+- [x] Criar auditoria documental inicial da Fase 7.
+- [ ] Criar ou validar primeiro profile admin manualmente no Dashboard Supabase real.
+- [ ] Confirmar profile `role=admin` e `status=active` sem versionar e-mail ou UUID reais.
+- [ ] Testar login Google admin.
+- [ ] Confirmar acesso ao painel admin para profile admin ativo.
+- [ ] Testar usuário comum sem role admin.
+- [ ] Confirmar bloqueio visual do painel admin para usuário comum.
+- [ ] Registrar evidências sanitizadas finais.
+- [ ] Validar `npm run lint`.
+- [ ] Validar `npm run build`.
+- [ ] Abrir PR separada da Fase 7 após validações.
+
+### Fora de escopo mantido
+
+- Vendas.
+- Carrinho.
+- Checkout.
+- Estoque.
+- Lotes.
+- Pagamentos.
+- Comprovantes.
+- Storage.
+- PWA/offline real.
+- Dashboard operacional.
+- Fechamento diário.
+- Remoção total do Firebase.
+- Migração completa do comprador.
+- Fluxo financeiro.
