@@ -301,3 +301,46 @@ Base segura: 00e746e
 - Remocao total do Firebase.
 - Migracao completa do comprador.
 - Fluxo financeiro.
+
+## FASE 6 — Aplicar e validar Supabase Profiles/RLS no ambiente real
+
+Status: EM ANDAMENTO
+
+Base:
+- Fase 5 concluída e mergeada na main;
+- main sincronizada em d7a7654;
+- branch criada: feat/fase-6-apply-validate-supabase-profiles-rls.
+
+Concluído:
+- gate pós-Fase 5 executado;
+- migration 20260612180000_create_profiles_rls.sql auditada;
+- npm run lint aprovado na base inicial;
+- npm run build aprovado na base inicial;
+- Supabase CLI testada via npx supabase;
+- bloqueio de rede corporativa diagnosticado para PostgreSQL/pooler;
+- projeto Supabase real identificado: dwbvclvqratgiyusnliq;
+- migration aplicada no Supabase real via Dashboard SQL Editor;
+- grants amplos em public.profiles corrigidos por hardening manual controlado;
+- grants finais validados para authenticated: INSERT, SELECT, UPDATE;
+- supabase/.temp/ adicionado ao .gitignore.
+
+Pendente:
+- criar/validar primeiro admin manualmente sem versionar dados reais;
+- testar login Google admin;
+- testar bloqueio de usuário comum;
+- validação final npm run lint;
+- validação final npm run build;
+- abrir PR da Fase 6.
+
+Fora de escopo mantido:
+- vendas;
+- carrinho;
+- checkout;
+- estoque;
+- pagamentos;
+- comprovantes;
+- Storage;
+- PWA/offline real;
+- dashboard operacional;
+- fechamento diário;
+- remoção total do Firebase.
