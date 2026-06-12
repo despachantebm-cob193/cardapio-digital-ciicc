@@ -12,6 +12,10 @@ import {
   onSupabaseAuthStateChange,
   type AuthSession,
 } from './features/auth/supabaseAuthService';
+import {
+  getProfileByAuthUserId,
+  isActiveAdminProfile,
+} from './features/auth/supabaseProfileService';
 import { Product, StoreSetting } from './types';
 import CustomerView from './components/CustomerView';
 import AdminLogin from './components/AdminLogin';
@@ -79,10 +83,24 @@ export default function App() {
       }
     });
 
-    // 5. Trace Supabase Auth session for the new controlled Google login flow
-    const handleSupabaseSession = (session: AuthSession | null) => {
-      if (session?.user) {
-        setAdminAuthenticated(true);
+    // 5. Trace Supabase Auth session and authorize admin access by Supabase profile role
+    const handleSupabaseSession = async (session: AuthSession | null) => {
+      if (!session?.user) {
+        return;
+      }
+
+      try {
+        const profile = await getProfileByAuthUserId(session.user.id);
+
+        if (isActiveAdminProfile(profile)) {
+          setAdminAuthenticated(true);
+        } else {
+          setAdminAuthenticated(false);
+          console.warn('Sessão Supabase Auth encontrada, mas sem profile admin ativo.');
+        }
+      } catch (err) {
+        setAdminAuthenticated(false);
+        console.error('Falha ao carregar profile Supabase Auth:', err);
       }
     };
 
@@ -92,7 +110,9 @@ export default function App() {
         console.error('Falha ao verificar sessão Supabase Auth:', err);
       });
 
-    const unsubscribeSupabaseAuth = onSupabaseAuthStateChange(handleSupabaseSession);
+    const unsubscribeSupabaseAuth = onSupabaseAuthStateChange((session) => {
+      void handleSupabaseSession(session);
+    });
 
     return () => {
       unsubscribeSettings();
