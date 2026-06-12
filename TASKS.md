@@ -215,7 +215,7 @@ Data de início: 2026-06-12
 
 ## FASE 4A — Perfis e Roles Supabase
 
-Status: EM_ANDAMENTO
+Status: CONCLUIDA_EM_PR_DRAFT
 
 Branch: feat/fase-4-supabase-profiles-roles
 
@@ -227,11 +227,11 @@ Branch: feat/fase-4-supabase-profiles-roles
 - [x] Helper de admin ativo criado.
 - [x] App.tsx ajustado para exigir profile admin ativo em sessão Supabase.
 - [x] Firebase legado mantido durante transição.
-- [ ] Auditoria documental da Fase 4 revisada.
-- [ ] Validação final lint/build.
-- [ ] Commit local.
-- [ ] Push da branch.
-- [ ] PR separada.
+- [x] Auditoria documental da Fase 4 revisada.
+- [x] Validação final lint/build.
+- [x] Commit local.
+- [x] Push da branch.
+- [x] PR separada.
 
 Fora de escopo mantido nesta fase:
 
