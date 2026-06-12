@@ -23,7 +23,7 @@ Sistema de autoatendimento interno para controle de retirada de mercadorias, pag
 - [x] Criar mapa de evolucao
 - [x] Criar governanca
 - [x] Criar TASKS
-- [ ] Criar PRD completo
+- [x] Criar PRD completo
 - [ ] Criar arquitetura tecnica
 
 ### FASE 1 — Limpeza e identidade
