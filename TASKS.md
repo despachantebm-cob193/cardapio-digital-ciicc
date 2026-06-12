@@ -22,7 +22,7 @@ Status: EM_ANDAMENTO
 - [x] Mapa de evolucao criado.
 - [x] Governanca inicial criada.
 - [x] TASKS inicial criado.
-- [ ] PRD completo do MVP.
+- [x] PRD completo do MVP.
 - [ ] Arquitetura tecnica do MVP.
 - [ ] Modelo de dados Supabase.
 - [ ] Criterios finais de aceite.
@@ -123,3 +123,4 @@ Status: NAO_INICIADA
 - App alvo: PWA.
 - Auth alvo: Google pelo Supabase.
 - Firebase atual: legado/prototipo a migrar.
+- PRD vigente: docs/PRD_MVP.md.
