@@ -1,7 +1,7 @@
 # TASKS — MVP Cardapio Digital CIICC
 
 Data: 2026-06-12
-Status geral: FASE_1_EM_ANDAMENTO
+Status geral: FASE_5_EM_ANDAMENTO
 
 Este arquivo acompanha a execucao do projeto por fases. Deve ser atualizado a cada novo chat, branch ou PR.
 
@@ -30,7 +30,7 @@ Status: CONCLUIDA
 
 ## FASE 1 — Limpeza e CI
 
-Status: EM_ANDAMENTO
+Status: CONCLUIDA
 
 - [x] README real do produto.
 - [x] Titulo do app atualizado.
@@ -40,12 +40,12 @@ Status: EM_ANDAMENTO
 
 ## FASE 2 — Autenticacao e Supabase
 
-Status: NAO_INICIADA
+Status: CONCLUIDA
 
-- [ ] Cliente Supabase.
-- [ ] Login Google.
-- [ ] Perfil de usuario.
-- [ ] Perfil administrador.
+- [x] Cliente Supabase.
+- [x] Login Google.
+- [x] Perfil de usuario.
+- [x] Perfil administrador.
 - [ ] Remocao do fluxo Firebase.
 
 ## FASE 3 — Dados do MVP
@@ -131,7 +131,7 @@ Status: NAO_INICIADA
 
 ## Fase 2 — Supabase Auth
 
-Status: CONCLUIDA_TECNICAMENTE_AGUARDANDO_MERGE  
+Status: CONCLUIDA_E_MERGEADA  
 Branch: feat/fase-2-supabase-auth  
 Data de início: 2026-06-12
 
@@ -151,7 +151,7 @@ Data de início: 2026-06-12
 
 ### Pendente nesta fase
 
-- [ ] Integrar login Google via Supabase em fluxo controlado.
+- [x] Integrar login Google via Supabase em fluxo controlado.
 - [ ] Mapear substituição progressiva dos pontos Firebase em runtime.
 - [x] Confirmar ausência de segredos reais antes do commit.
 - [x] Abrir PR separada da Fase 2.
@@ -176,7 +176,7 @@ Data de início: 2026-06-12
 
 ## Fase 3 — Supabase Google Auth Flow
 
-Status: CONCLUIDA_TECNICAMENTE_AGUARDANDO_PR
+Status: CONCLUIDA_E_MERGEADA
 Branch: feat/fase-3-supabase-google-auth-flow
 Data de início: 2026-06-12
 
@@ -194,7 +194,7 @@ Data de início: 2026-06-12
 
 ### Pendente nesta fase
 
-- [ ] Abrir PR separada da Fase 3.
+- [x] Abrir PR separada da Fase 3.
 
 ### Fora de escopo mantido
 
@@ -215,7 +215,7 @@ Data de início: 2026-06-12
 
 ## FASE 4A — Perfis e Roles Supabase
 
-Status: CONCLUIDA_EM_PR_DRAFT
+Status: CONCLUIDA_E_MERGEADA
 
 Branch: feat/fase-4-supabase-profiles-roles
 
@@ -232,6 +232,7 @@ Branch: feat/fase-4-supabase-profiles-roles
 - [x] Commit local.
 - [x] Push da branch.
 - [x] PR separada.
+- [x] PR #5 mergeada.
 
 Fora de escopo mantido nesta fase:
 
@@ -250,3 +251,53 @@ Fora de escopo mantido nesta fase:
 - Remoção total do Firebase.
 - Dashboard operacional completo.
 - Fechamento diário.
+
+## FASE 5A — Migrations e RLS inicial Supabase Profiles
+
+Status: EM_ANDAMENTO
+
+Branch: feat/fase-5-supabase-profiles-migrations-rls
+Base segura: 00e746e
+
+### Concluído nesta fase
+
+- [x] Confirmar PR #5 mergeada.
+- [x] Criar branch `feat/fase-5-supabase-profiles-migrations-rls`.
+- [x] Auditar `docs/SUPABASE_DATA_MODEL_MVP.md`.
+- [x] Auditar service de profiles criado na Fase 4.
+- [x] Criar estrutura `supabase/migrations`.
+- [x] Criar migration inicial de `profiles`.
+- [x] Criar enum `user_role`.
+- [x] Criar enum `profile_status`.
+- [x] Criar tabela `profiles`.
+- [x] Criar indices de `auth_user_id`, `email`, `role` e `status`.
+- [x] Habilitar RLS em `profiles`.
+- [x] Criar policies minimas de leitura, insert proprio e update proprio/admin.
+- [x] Criar trigger de protecao contra elevacao indevida de role/status por usuario nao admin.
+- [x] Documentar estrategia segura para primeiro admin.
+- [x] Manter Firebase legado ativo.
+- [x] Criar auditoria documental da Fase 5.
+
+### Pendente nesta fase
+
+- [ ] Validar `npm run lint` localmente ou via CI.
+- [ ] Validar `npm run build` localmente ou via CI.
+- [ ] Revisar SQL antes de aplicar em Supabase real.
+- [ ] Abrir PR separada da Fase 5.
+
+### Fora de escopo mantido
+
+- Vendas.
+- Carrinho.
+- Checkout.
+- Estoque.
+- Lotes.
+- Pagamentos.
+- Comprovantes.
+- Storage.
+- PWA/offline real.
+- Dashboard operacional.
+- Fechamento diario.
+- Remocao total do Firebase.
+- Migracao completa do comprador.
+- Fluxo financeiro.
