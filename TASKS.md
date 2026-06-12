@@ -131,7 +131,7 @@ Status: NAO_INICIADA
 
 ## Fase 2 — Supabase Auth
 
-Status: EM_ANDAMENTO  
+Status: CONCLUIDA_TECNICAMENTE_AGUARDANDO_MERGE  
 Branch: feat/fase-2-supabase-auth  
 Data de início: 2026-06-12
 
@@ -153,8 +153,8 @@ Data de início: 2026-06-12
 
 - [ ] Integrar login Google via Supabase em fluxo controlado.
 - [ ] Mapear substituição progressiva dos pontos Firebase em runtime.
-- [ ] Confirmar ausência de segredos reais antes do commit.
-- [ ] Abrir PR separada da Fase 2.
+- [x] Confirmar ausência de segredos reais antes do commit.
+- [x] Abrir PR separada da Fase 2.
 
 ### Fora de escopo mantido
 

@@ -2,7 +2,7 @@
 
 Data: 2026-06-12  
 Fase: FASE_2_SUPABASE_AUTH  
-Status: EM_ANDAMENTO  
+Status: CONCLUIDA_TECNICAMENTE  
 Tipo: Fundação técnica sem implementação funcional de negócio
 
 ## Objetivo
@@ -70,7 +70,7 @@ O Firebase permanece funcional como legado/protótipo até que a autenticação 
 
 - `npm run lint` — OK após criação de `src/vite-env.d.ts`.
 - `npm run build` — OK.
-- Segredos reais — pendente de auditoria final antes do commit.
+- Segredos reais — auditoria final executada antes do commit, sem ocorrência identificada.
 
 ## Estado
 
