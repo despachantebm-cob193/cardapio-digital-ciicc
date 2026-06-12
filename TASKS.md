@@ -128,3 +128,47 @@ Status: NAO_INICIADA
 - Arquitetura tecnica vigente: docs/TECHNICAL_ARCHITECTURE_MVP.md.
 - Modelo de dados Supabase vigente: docs/SUPABASE_DATA_MODEL_MVP.md.
 - Criterios de aceite vigentes: docs/MVP_ACCEPTANCE_CRITERIA.md.
+
+## Fase 2 — Supabase Auth
+
+Status: CONCLUIDA_TECNICAMENTE_AGUARDANDO_MERGE  
+Branch: feat/fase-2-supabase-auth  
+Data de início: 2026-06-12
+
+### Concluído nesta fase
+
+- [x] Sincronizar main pós-merge da PR #2.
+- [x] Criar branch `feat/fase-2-supabase-auth`.
+- [x] Auditar arquitetura atual antes de editar.
+- [x] Instalar `@supabase/supabase-js`.
+- [x] Criar cliente Supabase inicial.
+- [x] Criar camada inicial de autenticação/sessão Supabase.
+- [x] Criar tipos mínimos de perfil/role.
+- [x] Criar tipagem Vite para variáveis `VITE_*`.
+- [x] Validar `npm run lint`.
+- [x] Validar `npm run build`.
+- [x] Manter Firebase como legado ativo durante a transição.
+
+### Pendente nesta fase
+
+- [ ] Integrar login Google via Supabase em fluxo controlado.
+- [ ] Mapear substituição progressiva dos pontos Firebase em runtime.
+- [x] Confirmar ausência de segredos reais antes do commit.
+- [x] Abrir PR separada da Fase 2.
+
+### Fora de escopo mantido
+
+- Migrations completas.
+- RLS final.
+- Storage de comprovantes.
+- Vendas.
+- Carrinho.
+- Checkout.
+- Estoque.
+- Lotes.
+- Pagamentos.
+- Comprovantes.
+- Dashboard admin.
+- PWA/offline real.
+- Deploy Vercel real.
+- Remoção abrupta do Firebase.
