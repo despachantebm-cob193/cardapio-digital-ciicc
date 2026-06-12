@@ -1,0 +1,6 @@
+{
+  "name": "Cardápio Digital",
+  "description": "Um cardápio digital elegante para celular que permite ao cliente ler QR Code, visualizar produtos, copiar a chave PIX e entrar em contato por WhatsApp, gerenciado por um painel de administrador rápido.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

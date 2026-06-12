@@ -1,0 +1,104 @@
+{
+  "entities": {
+    "StoreSetting": {
+      "title": "Store Setting",
+      "description": "Primary settings of the digital menu.",
+      "type": "object",
+      "properties": {
+        "storeName": { "type": "string", "description": "The name of the store" },
+        "pixKey": { "type": "string", "description": "The predefined PIX key" },
+        "whatsappNumber": { "type": "string", "description": "Admin Whatsapp number" },
+        "whatsappMessage": { "type": "string", "description": "Default chat message" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last updated" }
+      },
+      "required": ["storeName", "pixKey", "whatsappNumber"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Products or Menu items.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique product ID" },
+        "name": { "type": "string", "description": "Product name" },
+        "description": { "type": "string", "description": "Product description" },
+        "price": { "type": "number", "description": "Product price in BRL (Brazilian Real)" },
+        "available": { "type": "boolean", "description": "Whether the product is currently offered" },
+        "category": { "type": "string", "description": "Food category or type" },
+        "emoji": { "type": "string", "description": "Visual icon or emoji" },
+        "imageUrl": { "type": "string", "description": "Optional product image URL" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "name", "price", "available", "category"]
+    },
+    "CustomerRegistration": {
+      "title": "Customer Registration",
+      "description": "Mandatory Google-based signup profile details with shift time, workplace, and base64 selfie.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Google User ID" },
+        "name": { "type": "string", "description": "Full name of the customer" },
+        "email": { "type": "string", "description": "Google account email" },
+        "workplace": { "type": "string", "description": "Workplace name/location" },
+        "shiftHours": { "type": "string", "description": "Working hours/Shift of the user" },
+        "photoUrl": { "type": "string", "description": "Base64 encoded string representing the compulsory profile photo" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["uid", "name", "email", "workplace", "shiftHours", "photoUrl", "createdAt"]
+    },
+    "Sale": {
+      "title": "Sale / Order Record",
+      "description": "A record of food items ordered by a verified customer, of payment status/mode, and total amount.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique sale ID" },
+        "customerId": { "type": "string", "description": "ID of the customer who ordered" },
+        "customerName": { "type": "string", "description": "Name of the customer" },
+        "customerEmail": { "type": "string", "description": "Email of the customer" },
+        "customerWorkplace": { "type": "string", "description": "Workplace of the customer" },
+        "customerShiftHours": { "type": "string", "description": "Shift hours of the customer" },
+        "customerPhotoUrl": { "type": "string", "description": "Selfie photo of the customer" },
+        "items": { "type": "array", "description": "List of items purchased" },
+        "totalAmount": { "type": "number", "description": "Total purchase value" },
+        "paymentMethod": { "type": "string", "enum": ["later", "pix"], "description": "Payment method chosen: pay later or pay via PIX" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Sale registration timestamp" }
+      },
+      "required": ["id", "customerId", "customerName", "customerEmail", "customerWorkplace", "customerShiftHours", "items", "totalAmount", "paymentMethod", "createdAt"]
+    },
+    "ProductBatch": {
+      "title": "Product Batch",
+      "description": "Information about a physical lot of products made available by date.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique batch ID" },
+        "productId": { "type": "string", "description": "Foreign key to unique product ID" },
+        "productName": { "type": "string", "description": "Product name" },
+        "batchDate": { "type": "string", "format": "date", "description": "The date when the batch was made available" },
+        "initialQuantity": { "type": "number", "description": "The total physical quantity made/delivered" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Batch registration timestamp" }
+      },
+      "required": ["id", "productId", "productName", "batchDate", "initialQuantity", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/settings/store": {
+      "schema": "StoreSetting",
+      "description": "Global settings of the digital menu."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Catalog of menus containing prices and availabilities."
+    },
+    "/customer_registrations/{uid}": {
+      "schema": "CustomerRegistration",
+      "description": "Secure list of mandatory customer profiles with shift and photo details."
+    },
+    "/sales/{saleId}": {
+      "schema": "Sale",
+      "description": "Recorded customer sales and control list."
+    },
+    "/batches/{batchId}": {
+      "schema": "ProductBatch",
+      "description": "List of product batches/lots made available."
+    }
+  }
+}
