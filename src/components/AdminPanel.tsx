@@ -1,49 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Plus,
   Trash2,
   Edit,
   Save,
-  QrCode,
   Smartphone,
   Check,
   LogOut,
   Sliders,
-  Sparkles,
   ToggleLeft,
   ToggleRight,
   PackageCheck,
   Coins,
   DollarSign,
-  BriefcaseMedical, // used for custom categories or tags
   X,
-  FileText,
-  Users,
   Clock,
-  Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, StoreSetting, ProductBatch } from '../types';
+import { Product, StoreSetting } from '../types';
 import {
-  saveStoreSettings,
-  addProduct,
-  updateProduct,
-  deleteProduct,
-  seedInitialDataIfNeeded,
-  subscribeSales,
-  deleteSale,
-  Sale,
-  addProductBatch,
-  updateProductBatch,
-  deleteProductBatch,
-  subscribeProductBatches
-} from '../dbService';
-import { logout, auth } from '../firebase';
+  addSupabaseProduct,
+  deleteSupabaseProduct,
+  deleteSupabaseSale,
+  listSupabaseSales,
+  saveSupabaseStoreSettings,
+  updateSupabaseProduct,
+  type SupabaseSale,
+} from '../features/supabase/supabaseCoreDataService';
 
 interface AdminPanelProps {
   products: Product[];
   settings: StoreSetting;
   onExitAdmin: () => void;
+  onCoreDataChanged?: () => Promise<void> | void;
 }
 
 const CATEGORIES = [
@@ -57,7 +46,7 @@ const CATEGORIES = [
 
 const POPULAR_EMOJIS = ['🍔', '🍕', '🍟', '🥤', '🍰', '🧅', '🍨', '🍗', '🌭', '🥗', '☕', '🍺'];
 
-export default function AdminPanel({ products, settings, onExitAdmin }: AdminPanelProps) {
+export default function AdminPanel({ products, settings, onExitAdmin, onCoreDataChanged }: AdminPanelProps) {
   // Settings Form State
   const [storeName, setStoreName] = useState(settings.storeName);
   const [pixKey, setPixKey] = useState(settings.pixKey);
@@ -70,20 +59,10 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
   const [activeTab, setActiveTab] = useState<'products' | 'settings' | 'qrcode' | 'sales' | 'batches'>('products');
 
   // Sales list track state
-  const [sales, setSales] = useState<Sale[]>([]);
+  const [sales, setSales] = useState<SupabaseSale[]>([]);
   const [salesLoading, setSalesLoading] = useState(false);
   const [salesSearchQuery, setSalesSearchQuery] = useState('');
   const [salesPaymentFilter, setSalesPaymentFilter] = useState<'all' | 'pix' | 'later'>('all');
-
-  // Product Lot/Batch states
-  const [batches, setBatches] = useState<ProductBatch[]>([]);
-  const [batchesLoading, setBatchesLoading] = useState(false);
-  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-  const [editingBatch, setEditingBatch] = useState<ProductBatch | null>(null);
-  const [formBatchProductId, setFormBatchProductId] = useState('');
-  const [formBatchDate, setFormBatchDate] = useState(new Date().toISOString().split('T')[0]);
-  const [formBatchInitialQuantity, setFormBatchInitialQuantity] = useState('');
-  const [batchSubmitLoading, setBatchSubmitLoading] = useState(false);
 
   // Product Selection/Modal State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -114,41 +93,33 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
     setWhatsappMessage(settings.whatsappMessage);
   }, [settings]);
 
-  // Real-time subscribe to register sales and orders
-  useEffect(() => {
-    if (activeTab === 'sales' || activeTab === 'batches') {
-      setSalesLoading(true);
-      const unsubscribe = subscribeSales(
-        (data) => {
-          setSales(data);
-          setSalesLoading(false);
-        },
-        (err) => {
-          console.error("Erro na escuta de vendas/comandas em tempo real:", err);
-          setSalesLoading(false);
-        }
-      );
-      return () => unsubscribe();
-    }
-  }, [activeTab]);
+  const notifyCoreDataChanged = useCallback(async () => {
+    if (!onCoreDataChanged) return;
 
-  // Real-time subscribe to lot/batch records
-  useEffect(() => {
-    if (activeTab === 'batches') {
-      setBatchesLoading(true);
-      const unsubscribe = subscribeProductBatches(
-        (data) => {
-          setBatches(data);
-          setBatchesLoading(false);
-        },
-        (err) => {
-          console.error("Erro na escuta de lotes de produtos:", err);
-          setBatchesLoading(false);
-        }
-      );
-      return () => unsubscribe();
+    try {
+      await onCoreDataChanged();
+    } catch (err) {
+      console.error('Falha ao atualizar dados locais após gravação Supabase:', err);
     }
-  }, [activeTab]);
+  }, [onCoreDataChanged]);
+
+  const loadSales = useCallback(async () => {
+    setSalesLoading(true);
+    try {
+      const data = await listSupabaseSales();
+      setSales(data);
+    } catch (err) {
+      console.error('Erro ao carregar vendas/comandas no Supabase:', err);
+    } finally {
+      setSalesLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'sales') {
+      void loadSales();
+    }
+  }, [activeTab, loadSales]);
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -163,12 +134,13 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
         whatsappNumber: cleanWA,
         whatsappMessage
       };
-      await saveStoreSettings(cleanSettings);
+      await saveSupabaseStoreSettings(cleanSettings);
+      await notifyCoreDataChanged();
       setSettingsSaved(true);
       setTimeout(() => setSettingsSaved(false), 3000);
     } catch (err) {
       console.error('Falha ao salvar configurações:', err);
-      alert('Sua sessão de escrita expirou ou você não está conectado com o Google. Use o botão no topo do painel!');
+      alert('Falha ao gravar no Supabase. Verifique sua sessão e permissão administrativa.');
     } finally {
       setSettingsLoading(false);
     }
@@ -176,10 +148,11 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
 
   const handleProductToggleAvailability = async (product: Product) => {
     try {
-      await updateProduct(product.id, { available: !product.available });
+      await updateSupabaseProduct(product.id, { available: !product.available });
+      await notifyCoreDataChanged();
     } catch (err) {
       console.error('Falha ao alternar disponibilidade:', err);
-      alert('Sem permissão de gravação. Por favor, conecte-se com o Google.');
+      alert('Sem permissão de gravação no Supabase. Verifique sua sessão administrativa.');
     }
   };
 
@@ -210,10 +183,11 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
   const handleProductDelete = async (id: string) => {
     if (window.confirm('Tem certeza que deseja excluir este produto do cardápio?')) {
       try {
-        await deleteProduct(id);
+        await deleteSupabaseProduct(id);
+        await notifyCoreDataChanged();
       } catch (err) {
         console.error('Falha ao deletar produto:', err);
-        alert('Erro ao excluir produto. Verifique suas credenciais.');
+        alert('Erro ao excluir produto. Verifique sua permissão administrativa no Supabase.');
       }
     }
   };
@@ -244,122 +218,23 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
       };
 
       if (editingProduct) {
-        await updateProduct(editingProduct.id, productPayload);
+        await updateSupabaseProduct(editingProduct.id, productPayload);
       } else {
-        await addProduct(productPayload);
+        await addSupabaseProduct(productPayload);
       }
 
+      await notifyCoreDataChanged();
       setIsProductModalOpen(false);
     } catch (err) {
       console.error('Erro ao salvar produto:', err);
-      alert('Sua sessão no Firebase expirou ou você não tem acesso de gravação. Faça login por Google se possível.');
+      alert('Falha ao salvar produto no Supabase. Verifique sua sessão e permissão administrativa.');
     } finally {
       setProductSubmitLoading(false);
     }
   };
 
-  // Handlers for Product Batches (Lotes de Produtos)
-  const handleBatchFormSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formBatchProductId || !formBatchDate || !formBatchInitialQuantity) {
-      alert('Por favor, preencha todos os campos obrigatórios.');
-      return;
-    }
-
-    const selectedProd = products.find(p => p.id === formBatchProductId);
-    if (!selectedProd) {
-      alert('Produto selecionado não encontrado.');
-      return;
-    }
-
-    setBatchSubmitLoading(true);
-    try {
-      const initQty = parseInt(formBatchInitialQuantity, 10);
-      if (isNaN(initQty) || initQty < 0) {
-        alert('A quantidade inicial deve ser zero ou maior.');
-        setBatchSubmitLoading(false);
-        return;
-      }
-
-      if (editingBatch) {
-        await updateProductBatch(editingBatch.id, {
-          productId: formBatchProductId,
-          productName: selectedProd.name,
-          batchDate: formBatchDate,
-          initialQuantity: initQty
-        });
-      } else {
-        await addProductBatch({
-          productId: formBatchProductId,
-          productName: selectedProd.name,
-          batchDate: formBatchDate,
-          initialQuantity: initQty
-        });
-      }
-      setIsBatchModalOpen(false);
-      setEditingBatch(null);
-      setFormBatchProductId('');
-      setFormBatchInitialQuantity('');
-    } catch (err) {
-      console.error('Erro ao salvar lote:', err);
-      alert('Erro ao salvar o lote. Verifique seus privilégios de administrador.');
-    } finally {
-      setBatchSubmitLoading(false);
-    }
-  };
-
-  const openAddBatchModal = () => {
-    setEditingBatch(null);
-    setFormBatchProductId(products[0]?.id || '');
-    setFormBatchDate(new Date().toISOString().split('T')[0]);
-    setFormBatchInitialQuantity('');
-    setIsBatchModalOpen(true);
-  };
-
-  const openEditBatchModal = (batch: ProductBatch) => {
-    setEditingBatch(batch);
-    setFormBatchProductId(batch.productId);
-    setFormBatchDate(batch.batchDate);
-    setFormBatchInitialQuantity(batch.initialQuantity.toString());
-    setIsBatchModalOpen(true);
-  };
-
-  const handleDeleteBatch = async (id: string, name: string) => {
-    if (window.confirm(`Tem certeza que deseja excluir o lote registrado para "${name}"?`)) {
-      try {
-        await deleteProductBatch(id);
-      } catch (err) {
-        console.error('Erro ao deletar lote:', err);
-        alert('Erro ao excluir o lote.');
-      }
-    }
-  };
-
-  const getBatchSold = (batch: ProductBatch) => {
-    let soldCount = 0;
-    const batchStart = new Date(batch.batchDate + 'T00:00:00');
-    sales.forEach(sale => {
-      const saleDate = new Date(sale.createdAt);
-      if (saleDate >= batchStart) {
-        sale.items.forEach(item => {
-          if (item.productId === batch.productId || item.name.toLowerCase() === batch.productName.toLowerCase()) {
-            soldCount += item.quantity;
-          }
-        });
-      }
-    });
-    return soldCount;
-  };
-
-  const handleGenerateSeed = async () => {
-    if (window.confirm('Deseja semear o cardápio com produtos de teste deliciosos?')) {
-      try {
-        await seedInitialDataIfNeeded();
-        alert('Cardápio semeado com sucesso! Atualizando produtos...');
-      } catch (err) {
-        console.error(err);
-      }
-    }
+  const handleGenerateSeed = () => {
+    alert('Seed manual removido na migração Supabase-only. Cadastre produtos manualmente no painel administrativo.');
   };
 
   const handleCopyLink = () => {
@@ -368,13 +243,8 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      onExitAdmin();
-    } catch (err) {
-      console.error(err);
-    }
+  const handleLogout = () => {
+    onExitAdmin();
   };
 
   return (
@@ -386,11 +256,9 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
             <span className="px-2.5 py-1 bg-amber-500/10 text-amber-600 text-[11px] font-bold tracking-wider uppercase rounded-full border border-amber-500/15">
               Administrador
             </span>
-            {auth.currentUser && (
-              <span className="text-[11px] font-mono text-zinc-400">
-                ({auth.currentUser.email})
-              </span>
-            )}
+            <span className="text-[11px] font-mono text-zinc-400">
+              Sessão Supabase ativa
+            </span>
           </div>
           <h1 className="font-display font-bold text-3xl text-zinc-900 mt-1">
             Painel de Alimentação
@@ -409,7 +277,7 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
             Ver Cardápio
           </button>
           <button
-            id="admin-logout-btn"
+            id="admin-signout-btn"
             onClick={handleLogout}
             className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl cursor-pointer transition-colors"
             title="Sair Administrativo"
@@ -477,27 +345,6 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
           Controle de Lotes 📦
         </button>
       </div>
-
-      {/* Test PIN indicator banner if not authenticated with Google */}
-      {(!auth.currentUser || !auth.currentUser.emailVerified) && (
-        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/15 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h4 className="font-display font-medium text-xs text-amber-900 flex items-center gap-1.5 leading-none">
-              <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-              Acesso em Modo de Teste (PIN ou Não Verificado)
-            </h4>
-            <p className="text-amber-800 text-[11px] leading-relaxed font-light">
-              Você acessou o painel administrativo utilizando credenciais locais de teste. Modificações ou novos produtos <strong>não serão gravados no banco de dados na nuvem</strong> até que você se autentique com uma Conta Google.
-            </p>
-          </div>
-          <button
-            onClick={handleLogout}
-            className="self-start md:self-auto shrink-0 px-3.5 py-1.5 bg-amber-500 hover:bg-amber-600 text-black font-bold text-[10px] uppercase tracking-wider rounded-xl cursor-pointer transition-colors"
-          >
-            Entrar via Google
-          </button>
-        </div>
-      )}
 
       {/* Active Content Components */}
       <div className="space-y-6">
@@ -627,7 +474,7 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
 
             {settingsSaved && (
               <div className="p-4 bg-emerald-50 border border-emerald-150 text-emerald-800 text-xs rounded-2xl text-center font-medium animate-pulse">
-                Configurações gravadas com sucesso no Firebase Cloud!
+                Configurações gravadas com sucesso no Supabase!
               </div>
             )}
 
@@ -708,7 +555,7 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
               className="w-full py-3.5 bg-zinc-900 hover:bg-zinc-800 disabled:opacity-50 text-white font-medium text-sm rounded-xl cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
             >
               <Save className="w-4 h-4" />
-              <span>{settingsLoading ? 'Processando gravação...' : 'Gravar Configurações no Firebase'}</span>
+              <span>{settingsLoading ? 'Processando gravação...' : 'Gravar Configurações no Supabase'}</span>
             </button>
           </form>
         )}
@@ -990,8 +837,10 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
                                 onClick={async () => {
                                   if (window.confirm(`Deseja dar baixa ou excluir a comanda de R$ ${sale.totalAmount.toFixed(2)} de ${sale.customerName}?`)) {
                                     try {
-                                      await deleteSale(sale.id);
+                                      await deleteSupabaseSale(sale.id);
+                                      await loadSales();
                                     } catch (err) {
+                                      console.error('Erro ao excluir venda no Supabase:', err);
                                       alert('Houve um erro ao excluir o registro.');
                                     }
                                   }
@@ -1038,196 +887,16 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
           </div>
         )}
 
-        {/* TAB 5: Live Batch Lot & Stock accounting list */}
+        {/* TAB 5: Product batch control is outside the current Supabase schema. */}
         {activeTab === 'batches' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="font-display font-semibold text-lg text-zinc-900 flex items-center gap-2">
-                  <PackageCheck className="w-5 h-5 text-amber-500" />
-                  Controle de Lotes de Lançamento
-                </h3>
-                <p className="text-zinc-500 text-xs mt-0.5">
-                  Acompanhe e controle lotes prontos de pratos ou produtos. Pratos vendidos em comandas abatem o lote a partir da data de disponibilização.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                onClick={openAddBatchModal}
-                className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-black rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all outline-hidden cursor-pointer shrink-0 self-start sm:self-auto shadow-xs"
-              >
-                <Plus className="w-4 h-4" />
-                Registrar Novo Lote
-              </button>
-            </div>
-
-            {/* Dashboard summary block (Lotes / Contabilidade) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Quantidade de lotes */}
-              <div className="bg-white border border-zinc-150 p-5 rounded-3xl shadow-3xs flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Lotes Ativos</span>
-                  <h3 className="font-mono font-black text-2xl text-zinc-900 mt-1 leading-none">
-                    {batches.length} cadastrados
-                  </h3>
-                </div>
-                <div className="p-3 bg-amber-500/10 text-amber-600 rounded-2xl">
-                  <Sliders className="w-5 h-5" />
-                </div>
-              </div>
-
-              {/* Total Item Count */}
-              <div className="bg-white border border-zinc-150 p-5 rounded-3xl shadow-3xs flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Itens Disponibilizados</span>
-                  <h3 className="font-mono font-black text-2xl text-zinc-850 mt-1 leading-none">
-                    {batches.reduce((acc, b) => acc + b.initialQuantity, 0)} un.
-                  </h3>
-                </div>
-                <div className="p-3 bg-zinc-100 text-zinc-500 rounded-2xl">
-                  <PackageCheck className="w-5 h-5" />
-                </div>
-              </div>
-
-              {/* Total Items Sold */}
-              <div className="bg-white border border-zinc-150 p-5 rounded-3xl shadow-3xs flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Vendido em Comandas</span>
-                  <h3 className="font-mono font-black text-2xl text-emerald-600 mt-1 leading-none">
-                    {batches.reduce((acc, b) => acc + getBatchSold(b), 0)} un.
-                  </h3>
-                </div>
-                <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-2xl">
-                  <DollarSign className="w-5 h-5" />
-                </div>
-              </div>
-
-              {/* Total Stock Remain */}
-              <div className="bg-white border border-zinc-150 p-5 rounded-3xl shadow-3xs flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Unidades Restantes / Sobra</span>
-                  <h3 className="font-mono font-black text-2xl text-amber-700 mt-1 leading-none">
-                    {batches.reduce((acc, b) => {
-                      const sold = getBatchSold(b);
-                      return acc + Math.max(0, b.initialQuantity - sold);
-                    }, 0)} un.
-                  </h3>
-                </div>
-                <div className="p-3 bg-amber-500/5 text-amber-600 rounded-2xl">
-                  <Sparkles className="w-5 h-5 animate-pulse" />
-                </div>
-              </div>
-            </div>
-
-            {/* Main Batch List Container */}
-            <div className="bg-white border border-zinc-150 rounded-3xl p-6">
-              {batchesLoading ? (
-                <div className="py-12 text-center flex flex-col items-center gap-2">
-                  <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin animate-faster" />
-                  <span className="text-xs text-zinc-500 font-medium">Sincronizando lotes em tempo real...</span>
-                </div>
-              ) : batches.length === 0 ? (
-                <div className="p-12 border-2 border-dashed border-zinc-200 text-center rounded-3xl bg-zinc-50/50">
-                  <PackageCheck className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
-                  <h4 className="font-semibold text-zinc-800 text-sm">Nenhum lote de produto cadastrado</h4>
-                  <p className="text-zinc-500 text-xs mt-1 max-w-xs mx-auto leading-relaxed">
-                    Clique em "Registrar Novo Lote" para lançar um lote produzido com data de disponibilização, integrando o estoque com as comandas de vendas automaticamente.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {batches.map((batch) => {
-                    const sold = getBatchSold(batch);
-                    const leftover = Math.max(0, batch.initialQuantity - sold);
-                    const percentSold = batch.initialQuantity > 0 ? Math.min(100, (sold / batch.initialQuantity) * 100) : 0;
-                    const prodMatch = products.find(p => p.id === batch.productId);
-
-                    return (
-                      <div key={batch.id} className="p-5 border border-zinc-150 rounded-2xl hover:border-zinc-300 bg-zinc-50/30 transition-all space-y-4">
-                        <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl select-none shrink-0 p-2.5 bg-amber-500/10 rounded-xl leading-none">
-                              {prodMatch?.emoji || '📦'}
-                            </span>
-                            <div>
-                              <h4 className="font-bold text-zinc-900 text-sm leading-tight">
-                                {batch.productName}
-                              </h4>
-                              <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px] text-zinc-500">
-                                <span className="font-semibold bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded border border-amber-500/10">
-                                  Lançamento: {new Date(batch.batchDate + 'T00:00:00').toLocaleDateString('pt-BR')}
-                                </span>
-                                <span className="bg-zinc-100 px-1.5 py-0.5 rounded text-zinc-650">
-                                  Categoria: {prodMatch?.category || 'Alimentação'}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 self-end sm:self-auto">
-                            <button
-                              type="button"
-                              onClick={() => openEditBatchModal(batch)}
-                              className="p-1.5 px-2.5 rounded-lg border border-zinc-200 hover:border-zinc-300 bg-white text-zinc-650 hover:text-zinc-800 transition-colors text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                              <span>Editar</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteBatch(batch.id, batch.productName)}
-                              className="p-1.5 px-2.5 rounded-lg border border-red-100 hover:border-red-250 bg-white hover:bg-red-50 text-red-550 transition-colors text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                              <span>Deletar</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Batch metrics and progress bar slider */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                          <div className="bg-white border border-zinc-150/80 p-3 rounded-xl">
-                            <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider">Total Disponibilizado</span>
-                            <span className="font-mono font-bold text-zinc-800 text-sm block mt-0.5">
-                              {batch.initialQuantity} unidades
-                            </span>
-                          </div>
-
-                          <div className="bg-white border border-zinc-150/80 p-3 rounded-xl">
-                            <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider">Total Vendido</span>
-                            <span className="font-mono font-bold text-emerald-600 text-sm block mt-0.5">
-                              {sold} unidades
-                            </span>
-                          </div>
-
-                          <div className="bg-white border border-zinc-150/80 p-3 rounded-xl">
-                            <span className="text-[10px] text-zinc-400 font-bold block uppercase tracking-wider">Sobra no Estoque</span>
-                            <span className={`font-mono font-bold text-sm block mt-0.5 ${leftover > 0 ? 'text-amber-700' : 'text-zinc-500'}`}>
-                              {leftover} unidades
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Inventory slider track progress */}
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px] text-zinc-455 font-semibold">
-                            <span>Vendido ({percentSold.toFixed(0)}%)</span>
-                            <span>Restante ({leftover} pratos)</span>
-                          </div>
-                          <div className="w-full bg-zinc-150 h-2 rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full rounded-full transition-all duration-500 ${percentSold >= 100 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                              style={{ width: `${percentSold}%` }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+          <div className="bg-white border border-zinc-150 rounded-3xl p-8 text-center">
+            <PackageCheck className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
+            <h3 className="font-display font-semibold text-lg text-zinc-900">
+              Controle de Lotes indisponível nesta etapa
+            </h3>
+            <p className="text-zinc-500 text-xs mt-2 max-w-md mx-auto leading-relaxed">
+              Esta função ficou fora do escopo da migração Supabase atual porque ainda não há tabela Supabase correspondente para lotes. Nenhuma operação legada de lote permanece ativa.
+            </p>
           </div>
         )}
       </div>
@@ -1423,170 +1092,6 @@ export default function AdminPanel({ products, settings, onExitAdmin }: AdminPan
         )}
       </AnimatePresence>
 
-      {/* MODAL: Add/Edit Product Batch */}
-      <AnimatePresence>
-        {isBatchModalOpen && (
-          <div id="batch-form-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-md bg-white rounded-3xl overflow-hidden shadow-2xl border border-zinc-100"
-            >
-              {/* Modal Head */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100">
-                <h3 className="font-display font-bold text-lg text-zinc-900">
-                  {editingBatch ? 'Editar Lote de Lançamento' : 'Registrar Novo Lote'}
-                </h3>
-                <button
-                  type="button"
-                  onClick={() => setIsBatchModalOpen(false)}
-                  className="p-1 text-zinc-400 hover:text-zinc-600 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Form Input fields */}
-              <form onSubmit={handleBatchFormSubmit} className="p-6 space-y-4">
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-600 mb-1">
-                    Selecione o Produto *
-                  </label>
-                  <select
-                    value={formBatchProductId}
-                    onChange={(e) => setFormBatchProductId(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-hidden transition-all"
-                  >
-                    <option value="" disabled>Selecione um produto cadastrado...</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>
-                        {p.emoji} {p.name} (R$ {p.price.toFixed(2)})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-600 mb-1">
-                    Data que o Lote foi Disponibilizado *
-                  </label>
-                  <input
-                    type="date"
-                    value={formBatchDate}
-                    onChange={(e) => setFormBatchDate(e.target.value)}
-                    required
-                    max={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3.5 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-hidden transition-all"
-                  />
-                  <p className="text-[10px] text-zinc-400 mt-1">
-                    Vendas deste produto registradas a partir desta data contarão automaticamente como baixas do lote.
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-zinc-600 mb-1">
-                    Quantidade Total Disponibilizada *
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Ex: 50"
-                    value={formBatchInitialQuantity}
-                    onChange={(e) => setFormBatchInitialQuantity(e.target.value)}
-                    required
-                    className="w-full px-3.5 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-hidden transition-all"
-                  />
-                </div>
-
-                {/* Dynamic Leftover/Sold calculation preview */}
-                {formBatchProductId && formBatchDate && (
-                  <div className="p-4 bg-zinc-50 border border-zinc-150 rounded-2xl space-y-2">
-                    <span className="text-[10px] text-zinc-455 font-bold uppercase tracking-wider block">Estoque & Sobra do Lote (Simulação)</span>
-                    <div className="grid grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <span className="text-[10px] text-zinc-500 block">Total Vendido</span>
-                        <span className="font-mono font-bold text-sm text-emerald-600">
-                          {(() => {
-                            let soldCount = 0;
-                            const batchStart = new Date(formBatchDate + 'T00:00:00');
-                            const selectedProd = products.find(p => p.id === formBatchProductId);
-                            sales.forEach(sale => {
-                              const saleDate = new Date(sale.createdAt);
-                              if (saleDate >= batchStart) {
-                                sale.items.forEach(item => {
-                                  if (
-                                    item.productId === formBatchProductId || 
-                                    (selectedProd && item.name.toLowerCase() === selectedProd.name.toLowerCase())
-                                  ) {
-                                    soldCount += item.quantity;
-                                  }
-                                });
-                              }
-                            });
-                            return soldCount;
-                          })()}{' '}
-                          unidades
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-zinc-500 block font-semibold text-amber-900">Não Vendido / Sobra</span>
-                        <span className="font-mono font-black text-sm text-amber-700">
-                          {(() => {
-                            let soldCount = 0;
-                            const batchStart = new Date(formBatchDate + 'T00:00:00');
-                            const selectedProd = products.find(p => p.id === formBatchProductId);
-                            sales.forEach(sale => {
-                              const saleDate = new Date(sale.createdAt);
-                              if (saleDate >= batchStart) {
-                                sale.items.forEach(item => {
-                                  if (
-                                    item.productId === formBatchProductId || 
-                                    (selectedProd && item.name.toLowerCase() === selectedProd.name.toLowerCase())
-                                  ) {
-                                    soldCount += item.quantity;
-                                  }
-                                });
-                              }
-                            });
-                            const initial = parseInt(formBatchInitialQuantity, 10) || 0;
-                            return Math.max(0, initial - soldCount);
-                          })()}{' '}
-                          unidades
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Submit button layout */}
-                <div className="pt-4 flex gap-3 border-t border-zinc-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsBatchModalOpen(false)}
-                    className="flex-1 py-3 text-xs font-bold text-zinc-500 hover:text-zinc-800 bg-zinc-100 hover:bg-zinc-150 rounded-xl transition-all cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={batchSubmitLoading}
-                    className="flex-1 py-3 bg-amber-500 hover:bg-amber-600 text-black font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                  >
-                    {batchSubmitLoading ? (
-                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
-                    <span>{editingBatch ? 'Salvar Lote' : 'Adicionar Lote'}</span>
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

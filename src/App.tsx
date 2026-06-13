@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   DEFAULT_SETTINGS,
   CustomerRegistration
@@ -43,6 +43,16 @@ export default function App() {
   // Live QR Scanner state
   const [isScannerOpen, setIsScannerOpen] = useState(false);
 
+  const refreshCoreData = useCallback(async () => {
+    const [newSettings, newProducts] = await Promise.all([
+      getSupabaseStoreSettings(),
+      listSupabaseProducts(),
+    ]);
+
+    setSettings(newSettings);
+    setProducts(newProducts);
+  }, []);
+
   // Boot & URL Parser
   useEffect(() => {
     // 1. Detect Table Code inside URL query params (e.g. ?mesa=04 or ?table=04)
@@ -53,14 +63,7 @@ export default function App() {
     }
 
     // 2. Load products/settings from Supabase.
-    Promise.all([
-      getSupabaseStoreSettings(),
-      listSupabaseProducts(),
-    ])
-      .then(([newSettings, newProducts]) => {
-        setSettings(newSettings);
-        setProducts(newProducts);
-      })
+    refreshCoreData()
       .catch((err) => {
         console.error('Falha ao carregar dados do Supabase:', err);
       })
@@ -111,7 +114,7 @@ export default function App() {
     return () => {
       unsubscribeSupabaseAuth();
     };
-  }, []);
+  }, [refreshCoreData]);
 
   const handleQRScanSuccess = (decodedText: string) => {
     try {
@@ -302,6 +305,7 @@ export default function App() {
                 products={products}
                 settings={settings}
                 onExitAdmin={handleAdminLogout}
+                onCoreDataChanged={refreshCoreData}
               />
             </motion.div>
           )}
