@@ -77,6 +77,7 @@ GOOGLE_PODE_REAUTENTICAR_SESSAO_DO_NAVEGADOR=SIM
 - PIN passou a exibir mensagem controlada de bloqueio.
 - Google Supabase permanece como caminho válido de autenticação admin.
 - Logout admin encerra a sessão Supabase e impede reabertura direta do painel sem passar pelo fluxo Google/Supabase.
+- Logout admin encerra a sessão Supabase e impede reabertura direta do painel sem passar pelo fluxo Google/Supabase.
 
 ## Segurança
 
