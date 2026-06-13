@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 import {
-  subscribeProducts,
-  subscribeStoreSettings,
-  seedInitialDataIfNeeded,
   DEFAULT_SETTINGS,
   CustomerRegistration
 } from './dbService';
@@ -17,6 +14,10 @@ import {
   getProfileByAuthUserId,
   isActiveAdminProfile,
 } from './features/auth/supabaseProfileService';
+import {
+  getSupabaseStoreSettings,
+  listSupabaseProducts,
+} from './features/supabase/supabaseCoreDataService';
 import { Product, StoreSetting } from './types';
 import CustomerView from './components/CustomerView';
 import AdminLogin from './components/AdminLogin';
@@ -52,40 +53,24 @@ export default function App() {
       setCurrentTable(tableParam);
     }
 
-    // 2. Clear out seed and populate initial demo products if collection is empty
-    // (Now handled securely when an administrator is authenticated below to prevent permissions errors)
-
-    // 3. Connect real-time subscribe snapshots to cloud Firestore
-    const unsubscribeSettings = subscribeStoreSettings(
-      (newSettings) => {
+    // 2. Load products/settings from Supabase.
+    Promise.all([
+      getSupabaseStoreSettings(),
+      listSupabaseProducts(),
+    ])
+      .then(([newSettings, newProducts]) => {
         setSettings(newSettings);
-        setLoading(false);
-      },
-      (err) => {
-        console.error('Falha ao sincronizar dados de settings:', err);
-        setLoading(false);
-      }
-    );
-
-    const unsubscribeProducts = subscribeProducts(
-      (newProducts) => {
         setProducts(newProducts);
-      },
-      (err) => {
-        console.error('Falha ao sincronizar lista de produtos:', err);
-      }
-    );
+      })
+      .catch((err) => {
+        console.error('Falha ao carregar dados do Supabase:', err);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
-    // 4. Trace if there is a persistent Firebase Google login credentials
-    const unsubscribeAuth = auth.onAuthStateChanged((user) => {
-      if (user && user.emailVerified) {
-        setAdminAuthenticated(true);
-        // Seed initial products/settings securely on verified administrative connection
-        seedInitialDataIfNeeded().catch((e) => console.log('Erro ao semear dados iniciais:', e));
-      }
-    });
+    // 3. Trace Supabase Auth session and authorize admin access by Supabase profile role
 
-    // 5. Trace Supabase Auth session and authorize admin access by Supabase profile role
     const handleSupabaseSession = async (session: AuthSession | null) => {
       setAdminAuthChecking(true);
 
@@ -125,9 +110,6 @@ export default function App() {
     });
 
     return () => {
-      unsubscribeSettings();
-      unsubscribeProducts();
-      unsubscribeAuth();
       unsubscribeSupabaseAuth();
     };
   }, []);
@@ -334,7 +316,7 @@ export default function App() {
             {settings.storeName || 'Cardápio Digital'} • Todos os direitos reservados.
           </p>
           <p className="text-[10px] font-light">
-            Desenvolvido com tecnologia segura de persistência na nuvem Firebase Firestore.
+            Desenvolvido com tecnologia segura de persistência na nuvem Supabase.
           </p>
         </div>
       </footer>
