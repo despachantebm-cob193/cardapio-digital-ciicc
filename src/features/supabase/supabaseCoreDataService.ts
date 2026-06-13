@@ -1,6 +1,30 @@
 import { supabase } from '../../lib/supabaseClient';
 import type { Product, StoreSetting } from '../../types';
 
+export interface SupabaseSaleItem {
+  id: string;
+  productId: string | null;
+  name: string;
+  quantity: number;
+  price: number;
+  emoji: string;
+}
+
+export interface SupabaseSale {
+  id: string;
+  customerProfileId: string;
+  customerName: string;
+  customerEmail: string;
+  customerWorkplace: string;
+  customerShiftHours: string;
+  customerPhotoUrl: string;
+  totalAmount: number;
+  paymentMethod: 'later' | 'pix';
+  createdAt: string;
+  items: SupabaseSaleItem[];
+}
+
+
 export type SupabaseCustomerProfile = {
   id: string;
   authUserId: string;
@@ -50,6 +74,29 @@ type StoreSettingsRow = {
   pix_key: string | null;
 };
 
+type SaleRow = {
+  id: string;
+  customer_profile_id: string;
+  customer_name: string;
+  customer_email: string;
+  customer_workplace: string;
+  customer_shift_hours: string;
+  customer_photo_url: string;
+  total_amount: number;
+  payment_method: 'later' | 'pix';
+  created_at: string;
+};
+
+type SaleItemRow = {
+  id: string;
+  sale_id: string;
+  product_id: string | null;
+  name: string;
+  quantity: number;
+  price: number;
+  emoji: string;
+};
+
 type ProfileRow = {
   id: string;
   auth_user_id: string;
@@ -72,6 +119,18 @@ function requireSupabase() {
   return supabase;
 }
 
+function toProductPayload(product: Omit<Product, 'id'> | Partial<Product>) {
+  return {
+    name: product.name,
+    description: product.description,
+    price: product.price,
+    category: product.category,
+    emoji: product.emoji,
+    image_url: product.imageUrl,
+    available: product.available,
+  };
+}
+
 function mapProduct(row: ProductRow): Product {
   return {
     id: row.id,
@@ -91,6 +150,29 @@ function mapStoreSettings(row: StoreSettingsRow | null): StoreSetting {
     whatsappNumber: row?.whatsapp_number || '',
     whatsappMessage: row?.whatsapp_message || '',
     pixKey: row?.pix_key || '',
+  };
+}
+
+function mapSale(row: SaleRow, items: SaleItemRow[] = []): SupabaseSale {
+  return {
+    id: row.id,
+    customerProfileId: row.customer_profile_id,
+    customerName: row.customer_name,
+    customerEmail: row.customer_email,
+    customerWorkplace: row.customer_workplace,
+    customerShiftHours: row.customer_shift_hours,
+    customerPhotoUrl: row.customer_photo_url,
+    totalAmount: row.total_amount,
+    paymentMethod: row.payment_method,
+    createdAt: row.created_at,
+    items: items.map((item) => ({
+      id: item.id,
+      productId: item.product_id,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      emoji: item.emoji,
+    })),
   };
 }
 
@@ -233,4 +315,113 @@ export async function createSupabaseSale(input: SupabaseSaleInput): Promise<stri
   }
 
   return sale.id;
+}
+
+
+export async function saveSupabaseStoreSettings(settings: StoreSetting): Promise<void> {
+  const client = requireSupabase();
+
+  const { error } = await client
+    .from('store_settings')
+    .upsert({
+      id: 'default',
+      store_name: settings.storeName,
+      whatsapp_number: settings.whatsappNumber,
+      whatsapp_message: settings.whatsappMessage,
+      pix_key: settings.pixKey,
+    });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function addSupabaseProduct(product: Omit<Product, 'id'>): Promise<string> {
+  const client = requireSupabase();
+
+  const { data, error } = await client
+    .from('products')
+    .insert(toProductPayload(product))
+    .select('id')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return data.id;
+}
+
+export async function updateSupabaseProduct(id: string, product: Partial<Product>): Promise<void> {
+  const client = requireSupabase();
+
+  const { error } = await client
+    .from('products')
+    .update(toProductPayload(product))
+    .eq('id', id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function deleteSupabaseProduct(id: string): Promise<void> {
+  const client = requireSupabase();
+
+  const { error } = await client
+    .from('products')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function listSupabaseSales(): Promise<SupabaseSale[]> {
+  const client = requireSupabase();
+
+  const { data: salesRows, error: salesError } = await client
+    .from('sales')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (salesError) {
+    throw salesError;
+  }
+
+  const saleIds = (salesRows || []).map((sale) => sale.id);
+
+  if (saleIds.length === 0) {
+    return [];
+  }
+
+  const { data: itemRows, error: itemsError } = await client
+    .from('sale_items')
+    .select('*')
+    .in('sale_id', saleIds);
+
+  if (itemsError) {
+    throw itemsError;
+  }
+
+  return (salesRows as SaleRow[]).map((sale) =>
+    mapSale(
+      sale,
+      (itemRows as SaleItemRow[]).filter((item) => item.sale_id === sale.id),
+    ),
+  );
+}
+
+export async function deleteSupabaseSale(id: string): Promise<void> {
+  const client = requireSupabase();
+
+  const { error } = await client
+    .from('sales')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    throw error;
+  }
 }
