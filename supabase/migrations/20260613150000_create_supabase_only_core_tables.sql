@@ -14,6 +14,7 @@ create table if not exists public.store_settings (
   id text primary key default 'default',
   store_name text not null default 'Cardápio Digital',
   whatsapp_number text,
+  whatsapp_message text,
   pix_key text,
   updated_at timestamptz not null default now(),
   constraint store_settings_singleton check (id = 'default')
