@@ -1,6 +1,6 @@
 # Mapa de Evolucao ate o MVP
 
-Status geral: PLANEJAMENTO_INICIAL
+Status geral: FASE_8_SUPABASE_ONLY_CONCLUIDA_TECNICAMENTE
 
 ## Produto alvo
 
@@ -40,7 +40,15 @@ Sistema de autoatendimento interno para controle de retirada de mercadorias, pag
 - [ ] Configurar login Google
 - [ ] Criar perfil de usuario
 - [ ] Criar controle de admin por role
-- [ ] Remover Firebase do fluxo ativo
+- [x] Remover Firebase do fluxo ativo
+
+### Estado atual apos Fase 8
+- [x] Runtime ativo Supabase-only
+- [x] Supabase Auth com Google como único auth ativo
+- [x] Supabase Postgres como única persistência ativa
+- [x] Dependência npm `firebase` removida
+- [x] `src/dbService.ts` e `src/firebase.ts` removidos
+- [~] Controle de lotes aguardando tabela/policies Supabase próprias
 
 ### FASE 3 — Banco de dados
 - [ ] Criar produtos

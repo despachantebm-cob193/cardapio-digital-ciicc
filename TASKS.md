@@ -1,7 +1,7 @@
 # TASKS — MVP Cardapio Digital CIICC
 
 Data: 2026-06-12
-Status geral: FASE_7_CONCLUIDA_TECNICAMENTE
+Status geral: FASE_8_SUPABASE_ONLY_CONCLUIDA_TECNICAMENTE
 
 Este arquivo acompanha a execucao do projeto por fases. Deve ser atualizado a cada novo chat, branch ou PR.
 
@@ -46,7 +46,7 @@ Status: CONCLUIDA
 - [x] Login Google.
 - [x] Perfil de usuario.
 - [x] Perfil administrador.
-- [ ] Remocao do fluxo Firebase.
+- [x] Remocao do fluxo Firebase.
 
 ## FASE 3 — Dados do MVP
 
@@ -123,7 +123,9 @@ Status: NAO_INICIADA
 - Deploy alvo: Vercel.
 - App alvo: PWA.
 - Auth alvo: Google pelo Supabase.
-- Firebase atual: legado/prototipo a migrar.
+- Firebase atual: removido do runtime ativo na Fase 8; historico preservado em documentos de auditoria.
+- Persistencia ativa atual: Supabase Postgres.
+- Auth ativo atual: Supabase Auth com Google.
 - PRD vigente: docs/PRD_MVP.md.
 - Arquitetura tecnica vigente: docs/TECHNICAL_ARCHITECTURE_MVP.md.
 - Modelo de dados Supabase vigente: docs/SUPABASE_DATA_MODEL_MVP.md.
@@ -379,4 +381,32 @@ Fora de escopo mantido:
 - dashboard operacional;
 - fechamento diário;
 - remoção Firebase.
+
+## Fase 8 — Supabase-only
+
+Status: CONCLUIDA_TECNICAMENTE
+
+Branch: feat/fase-8-supabase-only
+
+Base segura:
+- main antes da fase: 7a45d8e
+
+Entregas concluídas:
+- Supabase Google OAuth com prompt de seleção de conta.
+- Migration Supabase-only core com `store_settings`, `products`, `sales`, `sale_items` e extensão de `profiles`.
+- Serviço core/admin Supabase para settings, produtos, perfis de cliente, vendas e itens.
+- Cliente carrega settings/produtos do Supabase.
+- Cadastro/login de cliente usa Supabase Auth e `profiles`.
+- CustomerView cria vendas/comandas no Supabase.
+- AdminPanel grava settings/produtos e lê/exclui vendas pelo Supabase.
+- Aba de lotes mantida como indisponível nesta etapa, sem chamadas legadas.
+- `src/dbService.ts` e `src/firebase.ts` removidos.
+- Dependência `firebase` removida de `package.json` e `package-lock.json`.
+- Grep de runtime em `src`, `package.json` e `package-lock.json` sem Firebase/Firestore/dbService.
+- Auditoria registrada em `docs/audits/fase-8-supabase-only.md`.
+- lint/build locais aprovados.
+
+Pendências honestas:
+- Controle de lotes permanece fora do escopo da migração Supabase atual até existir tabela/policies Supabase correspondentes.
+- Build segue emitindo aviso de chunk acima de 500 kB, sem falhar.
 
