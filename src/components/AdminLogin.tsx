@@ -17,11 +17,8 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (pin === '1234') {
-      onLoginSuccess();
-    } else {
-      setError('Código PIN incorreto. Dica para teste: use 1234!');
-    }
+    setPin('');
+    setError('Acesso por PIN desabilitado nesta fase. Use o login Google via Supabase Auth.');
   };
 
   const handleGoogleLogin = async () => {
@@ -37,7 +34,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
       await signInWithGoogle();
     } catch (err) {
       console.error(err);
-      setError('Falha ao iniciar login Google via Supabase Auth. Use o PIN 1234 como alternativa controlada.');
+      setError('Falha ao iniciar login Google via Supabase Auth. Verifique a configuração Supabase/Google.');
       setGoogleLoading(false);
     }
   };
@@ -70,13 +67,13 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
         <form onSubmit={handlePinSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-600 mb-2">
-              Código PIN do Administrador
+              PIN legado do Administrador
             </label>
             <div className="relative">
               <input
                 id="admin-pin-input"
                 type={showPin ? 'text' : 'password'}
-                placeholder="Insira o PIN (Dica: 1234)"
+                placeholder="PIN legado desabilitado"
                 value={pin}
                 onChange={(e) => {
                   setPin(e.target.value);
@@ -101,7 +98,7 @@ export default function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) 
             id="admin-pin-submit-btn"
             className="w-full py-4.5 bg-zinc-900 hover:bg-zinc-800 text-white font-medium text-sm rounded-2xl cursor-pointer transition-all hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
           >
-            <span>Acessar com PIN</span>
+            <span>PIN legado desabilitado</span>
             <ChevronRight className="w-4 h-4" />
           </button>
         </form>

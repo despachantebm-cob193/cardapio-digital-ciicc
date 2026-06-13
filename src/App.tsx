@@ -36,6 +36,7 @@ export default function App() {
   // Layout View State
   const [isAdminMode, setIsAdminMode] = useState(false);
   const [adminAuthenticated, setAdminAuthenticated] = useState(false);
+  const [adminAuthChecking, setAdminAuthChecking] = useState(true);
   const [currentTable, setCurrentTable] = useState<string | null>(null);
 
   // Live QR Scanner state
@@ -85,7 +86,11 @@ export default function App() {
 
     // 5. Trace Supabase Auth session and authorize admin access by Supabase profile role
     const handleSupabaseSession = async (session: AuthSession | null) => {
+      setAdminAuthChecking(true);
+
       if (!session?.user) {
+        setAdminAuthenticated(false);
+        setAdminAuthChecking(false);
         return;
       }
 
@@ -94,6 +99,7 @@ export default function App() {
 
         if (isActiveAdminProfile(profile)) {
           setAdminAuthenticated(true);
+          setIsAdminMode(true);
         } else {
           setAdminAuthenticated(false);
           console.warn('Sessão Supabase Auth encontrada, mas sem profile admin ativo.');
@@ -101,12 +107,15 @@ export default function App() {
       } catch (err) {
         setAdminAuthenticated(false);
         console.error('Falha ao carregar profile Supabase Auth:', err);
+      } finally {
+        setAdminAuthChecking(false);
       }
     };
 
     getCurrentSession()
       .then(handleSupabaseSession)
       .catch((err) => {
+        setAdminAuthChecking(false);
         console.error('Falha ao verificar sessão Supabase Auth:', err);
       });
 
@@ -261,6 +270,19 @@ export default function App() {
                 />
               </motion.div>
             )
+          ) : adminAuthChecking ? (
+            <motion.div
+              key="admin-auth-checking"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="min-h-[80vh] flex flex-col items-center justify-center gap-4"
+            >
+              <div className="w-10 h-10 rounded-full border-4 border-amber-500 border-t-transparent animate-spin" />
+              <p className="text-sm font-medium text-zinc-600">
+                Verificando acesso administrativo...
+              </p>
+            </motion.div>
           ) : !adminAuthenticated ? (
             // Admin passcode / google auth gate
             <motion.div

@@ -1,7 +1,7 @@
 # TASKS — MVP Cardapio Digital CIICC
 
 Data: 2026-06-12
-Status geral: FASE_7_VALIDACAO_PRIMEIRO_ADMIN_EM_ANDAMENTO
+Status geral: FASE_7_CONCLUIDA_TECNICAMENTE
 
 Este arquivo acompanha a execucao do projeto por fases. Deve ser atualizado a cada novo chat, branch ou PR.
 
@@ -392,3 +392,38 @@ Criar ou validar o primeiro profile admin manualmente no Supabase real, testar l
 - Remoção total do Firebase.
 - Migração completa do comprador.
 - Fluxo financeiro.
+
+
+## Fase 7A — Validar primeiro admin Supabase real
+
+Status: CONCLUIDA_TECNICAMENTE
+
+Branch: feat/fase-7-validate-first-admin-access
+
+Base segura:
+- main pós-PR #7: 630a364
+
+Entregas concluídas:
+- Primeiro usuário admin criado no Supabase Auth via Google.
+- Primeiro profile admin criado/validado manualmente em public.profiles.
+- Validação de role=admin/status=active concluída.
+- Login Google admin validado.
+- Retorno pós-OAuth corrigido para abrir painel admin sem segundo clique.
+- PIN legado desabilitado como liberador de acesso admin nesta fase.
+- Usuário comum sem profile admin ativo bloqueado corretamente.
+- Evidências sanitizadas registradas em docs/audits/fase-7-first-admin-access-validation.md.
+- lint/build locais aprovados.
+
+Fora de escopo mantido:
+- vendas;
+- estoque;
+- carrinho;
+- checkout;
+- pagamentos;
+- comprovantes;
+- Storage;
+- PWA/offline real;
+- dashboard operacional;
+- fechamento diário;
+- remoção Firebase.
+
