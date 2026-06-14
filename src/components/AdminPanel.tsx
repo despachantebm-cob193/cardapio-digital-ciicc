@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, StoreSetting } from '../types';
+import { ProductIcon, SNACK_BAG_ICON } from './ProductIcon';
 import {
   addSupabaseProduct,
   deleteSupabaseProduct,
@@ -25,6 +26,12 @@ import {
   listSupabaseSales,
   saveSupabaseStoreSettings,
   updateSupabaseProduct,
+  getCurrentSupabaseAuthUserId,
+  listSupabaseProfilesForAdmin,
+  updateSupabaseProfileAdminAccess,
+  type SupabaseAdminProfile,
+  type SupabaseProfileRole,
+  type SupabaseProfileStatus,
   type SupabaseSale,
 } from '../features/supabase/supabaseCoreDataService';
 
@@ -35,15 +42,20 @@ interface AdminPanelProps {
 }
 
 const CATEGORIES = [
-  '🍔 Hambúrgueres',
-  '🍕 Pizzas',
-  '🍟 Acompanhamentos',
-  '🥤 Bebidas',
-  '🍰 Sobremesas',
-  '🍽️ Outros'
+  '🥟 Salgados e Lanches Quentes',
+  '☕ Quitandas e Confeitaria',
+  '🥨 Snacks e Conveniência',
+  '🍬 Doces e Guloseimas',
+  '🥤 Bebidas'
 ];
 
-const POPULAR_EMOJIS = ['🍔', '🍕', '🍟', '🥤', '🍰', '🧅', '🍨', '🍗', '🌭', '🥗', '☕', '🍺'];
+const POPULAR_EMOJIS = [
+  '🥟', SNACK_BAG_ICON, '🌭', '🥪', '🍳', '🥚',
+  '☕', '🍰', '🍩', '🍪', '🥖',
+  '🥨', '🍿', '🍜', '🛍️',
+  '🍬', '🍭', '🍧', '🧊',
+  '🥤', '🧃', '🧋'
+];
 
 export default function AdminPanel({ products, settings, onCoreDataChanged }: AdminPanelProps) {
   // Settings Form State
@@ -54,8 +66,8 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // Active Tab: 'products' | 'settings' | 'guidance' | 'sales' | 'batches'
-  const [activeTab, setActiveTab] = useState<'products' | 'settings' | 'guidance' | 'sales' | 'batches'>('products');
+  // Active Tab: 'products' | 'settings' | 'guidance' | 'sales' | 'batches' | 'admins'
+  const [activeTab, setActiveTab] = useState<'products' | 'settings' | 'guidance' | 'sales' | 'batches' | 'admins'>('products');
   const [adminNotice, setAdminNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   // Sales list track state
@@ -64,6 +76,12 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
   const [salesSearchQuery, setSalesSearchQuery] = useState('');
   const [salesPaymentFilter, setSalesPaymentFilter] = useState<'all' | 'pix' | 'later'>('all');
   const [paymentProofPreview, setPaymentProofPreview] = useState<{ url: string; customerName: string } | null>(null);
+
+  const [adminProfiles, setAdminProfiles] = useState<SupabaseAdminProfile[]>([]);
+  const [adminProfilesLoading, setAdminProfilesLoading] = useState(false);
+  const [adminProfilesSearchQuery, setAdminProfilesSearchQuery] = useState('');
+  const [adminProfilesActionLoading, setAdminProfilesActionLoading] = useState<string | null>(null);
+  const [currentAuthUserId, setCurrentAuthUserId] = useState<string | null>(null);
 
   // Product Selection/Modal State
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -74,7 +92,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
   const [formCostPrice, setFormCostPrice] = useState('');
   const [formLifecycleType, setFormLifecycleType] = useState<'same_day' | 'industrial'>('same_day');
   const [formCategory, setFormCategory] = useState(CATEGORIES[0]);
-  const [formEmoji, setFormEmoji] = useState('🍔');
+  const [formEmoji, setFormEmoji] = useState('🥟');
   const [formImageUrl, setFormImageUrl] = useState('');
   const [formStockQuantity, setFormStockQuantity] = useState('');
   const [formAvailable, setFormAvailable] = useState(true);
@@ -128,6 +146,63 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
     }
   }, [activeTab, loadSales]);
 
+  const loadAdminProfiles = useCallback(async () => {
+    setAdminProfilesLoading(true);
+
+    try {
+      const [profiles, authUserId] = await Promise.all([
+        listSupabaseProfilesForAdmin(),
+        getCurrentSupabaseAuthUserId(),
+      ]);
+
+      setAdminProfiles(profiles);
+      setCurrentAuthUserId(authUserId);
+    } catch (err) {
+      console.error('Erro ao carregar administradores no Supabase:', err);
+      showAdminNotice('error', 'Erro ao carregar usuários. Verifique sua sessão administrativa.');
+    } finally {
+      setAdminProfilesLoading(false);
+    }
+  }, [showAdminNotice]);
+
+  useEffect(() => {
+    if (activeTab === 'admins') {
+      void loadAdminProfiles();
+    }
+  }, [activeTab, loadAdminProfiles]);
+
+  const handleUpdateAdminProfileAccess = async (
+    profile: SupabaseAdminProfile,
+    changes: {
+      role?: SupabaseProfileRole;
+      status?: SupabaseProfileStatus;
+    },
+  ) => {
+    const isSelf = currentAuthUserId !== null && profile.authUserId === currentAuthUserId;
+
+    if (isSelf && (changes.role === 'customer' || changes.status === 'blocked' || changes.status === 'inactive')) {
+      showAdminNotice('error', 'Ação bloqueada: você não pode remover ou bloquear seu próprio acesso administrativo.');
+      return;
+    }
+
+    setAdminProfilesActionLoading(profile.id);
+
+    try {
+      const updatedProfile = await updateSupabaseProfileAdminAccess(profile.id, changes);
+      setAdminProfiles((currentProfiles) =>
+        currentProfiles.map((currentProfile) =>
+          currentProfile.id === updatedProfile.id ? updatedProfile : currentProfile,
+        ),
+      );
+      showAdminNotice('success', 'Acesso do usuário atualizado com sucesso.');
+    } catch (err) {
+      console.error('Erro ao atualizar acesso administrativo:', err);
+      showAdminNotice('error', 'Erro ao atualizar acesso. Verifique sua permissão administrativa.');
+    } finally {
+      setAdminProfilesActionLoading(null);
+    }
+  };
+
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
     setSettingsLoading(true);
@@ -173,7 +248,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
     setFormCostPrice('');
     setFormLifecycleType('same_day');
     setFormCategory(CATEGORIES[0]);
-    setFormEmoji('🍔');
+    setFormEmoji('🥟');
     setFormImageUrl('');
     setFormStockQuantity('');
     setFormAvailable(true);
@@ -188,7 +263,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
     setFormCostPrice(String(product.costPrice ?? 0));
     setFormLifecycleType(product.lifecycleType === 'same_day' ? 'same_day' : 'industrial');
     setFormCategory(product.category);
-    setFormEmoji(product.emoji || '🍔');
+    setFormEmoji(product.emoji || '🥟');
     setFormImageUrl(product.imageUrl || '');
     setFormStockQuantity(String(product.stockAvailable ?? 0));
     setFormAvailable(product.available);
@@ -433,7 +508,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
       {/* Upper Title Bar Component */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-zinc-100 mb-6">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
             <span className="px-2.5 py-1 bg-amber-500/10 text-amber-600 text-[11px] font-bold tracking-wider uppercase rounded-full border border-amber-500/15">
               Administrador
             </span>
@@ -554,6 +629,26 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
           </button>
 
           <button
+            id="tab-admins-btn"
+            onClick={() => setActiveTab('admins')}
+            className={'min-w-[152px] sm:min-w-[170px] snap-start rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer shadow-sm ' + (
+              activeTab === 'admins'
+                ? 'bg-amber-500 border-amber-500 text-zinc-950 shadow-amber-500/20 scale-[1.01]'
+                : 'bg-white border-zinc-200 text-zinc-650 hover:border-amber-300 hover:bg-amber-50'
+            )}
+          >
+            <span className="block text-[10px] font-black uppercase tracking-wider opacity-70">
+              Acessos
+            </span>
+            <span className="block text-sm font-black leading-tight">
+              Administradores
+            </span>
+            <span className="block text-[11px] font-bold opacity-75 mt-0.5">
+              {adminProfiles.filter((profile) => profile.role === 'admin' && profile.status === 'active').length} ativos
+            </span>
+          </button>
+
+          <button
             id="tab-batches-btn"
             onClick={() => setActiveTab('batches')}
             className={`min-w-[152px] sm:min-w-[170px] snap-start rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer shadow-sm ${
@@ -619,25 +714,23 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                   <div
                     key={product.id}
                     id={`product-row-${product.id}`}
-                    className={`p-4 bg-white border rounded-2xl flex items-center justify-between gap-4 transition-all hover:shadow-sm ${
+                    className={`p-4 bg-white border rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:shadow-sm ${
                       product.available ? 'border-zinc-150' : 'border-zinc-150 bg-zinc-50/60 opacity-75'
                     }`}
                   >
                     {/* Visual Details */}
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-12 h-12 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center text-2xl shrink-0">
-                        {product.emoji || '🍽️'}
-                      </div>
-                      <div className="min-w-0">
+                    <div className="flex items-start gap-3 min-w-0 w-full sm:flex-1">
+                      <div className="w-12 h-12 rounded-xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0 overflow-hidden"><ProductIcon icon={product.emoji} className="w-9 h-9 text-2xl" /></div>
+                      <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-display font-semibold text-zinc-900 text-sm truncate">
+                          <h4 className="font-display font-black text-zinc-900 text-sm leading-tight break-words line-clamp-2">
                             {product.name}
                           </h4>
-                          <span className="px-1.5 py-0.5 bg-zinc-100 text-[10px] text-zinc-500 font-medium rounded">
+                          <span className="w-fit max-w-full px-2 py-1 bg-zinc-100 text-[10px] text-zinc-600 font-bold rounded-lg leading-tight">
                             {product.category}
                           </span>
                         </div>
-                        <p className="text-zinc-500 text-xs truncate max-w-md mt-0.5">
+                        <p className="text-zinc-500 text-xs line-clamp-2 max-w-full mt-1 leading-relaxed">
                           {product.description || 'Sem descrição.'}
                         </p>
                         <span className="font-mono text-xs font-semibold text-zinc-700 mt-1 block">
@@ -647,10 +740,10 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                     </div>
 
                     {/* Actions and Switching */}
-                    <div id={`product-actions-${product.id}`} className="flex items-center gap-4 shrink-0">
+                    <div id={`product-actions-${product.id}`} className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-3 sm:pt-0 border-t sm:border-t-0 sm:border-l sm:pl-4 border-zinc-100">
                       {/* Availability toggle */}
                       <div className="flex flex-col items-end gap-1">
-                        <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
+                        <span className="text-[9px] uppercase font-black text-zinc-400 tracking-wider">
                           Ofertado
                         </span>
                         <button
@@ -680,7 +773,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                       </div>
 
                       {/* Line Controls Button */}
-                      <div className="flex gap-1.5 border-l border-zinc-150 pl-3.5">
+                      <div className="flex gap-1.5 border-l border-zinc-150 pl-3.5 shrink-0">
                         <button
                           id={`edit-product-btn-${product.id}`}
                           onClick={() => handleOpenEditModal(product)}
@@ -1120,7 +1213,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                               {sale.items.map((item, index) => (
                                 <div key={index} className="py-2 flex items-center justify-between text-zinc-750">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-sm select-none">{item.emoji || '🍽️'}</span>
+                                    <ProductIcon icon={item.emoji} className="w-5 h-5 text-sm shrink-0" />
                                     <span className="font-bold text-zinc-800">{item.quantity}x</span>
                                     <span>{item.name}</span>
                                   </div>
@@ -1197,6 +1290,221 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
             </div>
           )}
         </AnimatePresence>
+
+        {/* TAB 6: Admin users management */}
+        {activeTab === 'admins' && (() => {
+          const normalizedAdminProfileSearchQuery = adminProfilesSearchQuery.trim().toLowerCase();
+          const filteredAdminProfiles = adminProfiles.filter((profile) => {
+            if (!normalizedAdminProfileSearchQuery) return true;
+
+            return [
+              profile.displayName,
+              profile.email,
+              profile.workplace,
+              profile.shiftHours,
+              profile.role,
+              profile.status,
+            ]
+              .join(' ')
+              .toLowerCase()
+              .includes(normalizedAdminProfileSearchQuery);
+          });
+
+          const activeAdminCount = adminProfiles.filter(
+            (profile) => profile.role === 'admin' && profile.status === 'active',
+          ).length;
+
+          const blockedProfileCount = adminProfiles.filter((profile) => profile.status === 'blocked').length;
+
+          return (
+            <div className="space-y-5">
+              <div className="bg-white border border-zinc-150 rounded-3xl p-6 flex flex-col gap-4">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider font-black text-amber-600">
+                    Gestão de acesso
+                  </span>
+                  <h3 className="font-display font-semibold text-lg text-zinc-900">
+                    Administradores
+                  </h3>
+                  <p className="text-zinc-500 text-xs mt-1 max-w-2xl leading-relaxed">
+                    Promova usuários já cadastrados para administrador, bloqueie acessos indevidos ou reative perfis autorizados. O usuário precisa ter feito login Google pelo menos uma vez para aparecer nesta lista.
+                  </p>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <input
+                    id="admin-users-search-input"
+                    type="search"
+                    value={adminProfilesSearchQuery}
+                    onChange={(event) => setAdminProfilesSearchQuery(event.target.value)}
+                    placeholder="Buscar por nome, e-mail, setor, role ou status"
+                    className="flex-1 px-4 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-none transition-all"
+                  />
+
+                  <button
+                    id="reload-admin-users-btn"
+                    type="button"
+                    onClick={() => void loadAdminProfiles()}
+                    disabled={adminProfilesLoading}
+                    className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-60 text-white font-bold text-xs"
+                  >
+                    {adminProfilesLoading ? 'Carregando...' : 'Atualizar'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="bg-white border border-zinc-150 rounded-3xl p-5">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                    Usuários
+                  </span>
+                  <h4 className="font-mono font-black text-2xl text-zinc-900 mt-1">
+                    {adminProfiles.length}
+                  </h4>
+                </div>
+
+                <div className="bg-white border border-zinc-150 rounded-3xl p-5">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                    Admins ativos
+                  </span>
+                  <h4 className="font-mono font-black text-2xl text-emerald-600 mt-1">
+                    {activeAdminCount}
+                  </h4>
+                </div>
+
+                <div className="bg-white border border-zinc-150 rounded-3xl p-5">
+                  <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                    Bloqueados
+                  </span>
+                  <h4 className="font-mono font-black text-2xl text-red-600 mt-1">
+                    {blockedProfileCount}
+                  </h4>
+                </div>
+              </div>
+
+              {adminProfilesLoading ? (
+                <div className="bg-white border border-zinc-150 rounded-3xl p-10 text-center">
+                  <Clock className="w-8 h-8 text-zinc-300 mx-auto mb-3" />
+                  <p className="text-sm font-bold text-zinc-700">Carregando usuários...</p>
+                </div>
+              ) : filteredAdminProfiles.length === 0 ? (
+                <div className="bg-white border border-dashed border-zinc-250 rounded-3xl p-10 text-center">
+                  <AlertCircle className="w-9 h-9 text-zinc-300 mx-auto mb-3" />
+                  <h4 className="font-display font-semibold text-zinc-900">
+                    Nenhum usuário encontrado
+                  </h4>
+                  <p className="text-zinc-500 text-xs mt-2">
+                    O usuário precisa acessar o sistema com Google para criar um perfil antes de ser promovido.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {filteredAdminProfiles.map((profile) => {
+                    const isSelf = currentAuthUserId !== null && profile.authUserId === currentAuthUserId;
+                    const actionLoading = adminProfilesActionLoading === profile.id;
+                    const name = profile.displayName || profile.email || 'Usuário sem nome';
+
+                    return (
+                      <div
+                        key={profile.id}
+                        id={`admin-user-row-${profile.id}`}
+                        className="bg-white border border-zinc-150 rounded-3xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h4 className="font-display font-black text-zinc-900 text-sm truncate">
+                              {name}
+                            </h4>
+
+                            {isSelf && (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-black border border-amber-200 bg-amber-50 text-amber-700">
+                                Você
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-[11px] text-zinc-500 truncate mt-0.5">
+                            {profile.email || 'Sem e-mail'} • {profile.workplace || 'Setor não informado'}
+                          </p>
+
+                          <p className="text-[10px] text-zinc-400 truncate mt-0.5">
+                            Turno: {profile.shiftHours || 'Não informado'}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                          <span
+                            className={
+                              profile.role === 'admin'
+                                ? 'px-3 py-1 rounded-full text-[10px] font-black border border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'px-3 py-1 rounded-full text-[10px] font-black border border-zinc-200 bg-zinc-50 text-zinc-700'
+                            }
+                          >
+                            {profile.role === 'admin' ? 'Admin' : 'Cliente'}
+                          </span>
+
+                          <span
+                            className={
+                              profile.status === 'active'
+                                ? 'px-3 py-1 rounded-full text-[10px] font-black border border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : profile.status === 'blocked'
+                                  ? 'px-3 py-1 rounded-full text-[10px] font-black border border-red-200 bg-red-50 text-red-700'
+                                  : 'px-3 py-1 rounded-full text-[10px] font-black border border-amber-200 bg-amber-50 text-amber-700'
+                            }
+                          >
+                            {profile.status === 'active' ? 'Ativo' : profile.status === 'blocked' ? 'Bloqueado' : 'Inativo'}
+                          </span>
+
+                          {profile.role !== 'admin' && (
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => void handleUpdateAdminProfileAccess(profile, { role: 'admin', status: 'active' })}
+                              className="px-3 py-1.5 rounded-xl border border-emerald-100 bg-white hover:bg-emerald-50 text-emerald-700 text-[11px] font-bold disabled:opacity-60"
+                            >
+                              Promover admin
+                            </button>
+                          )}
+
+                          {profile.role === 'admin' && (
+                            <button
+                              type="button"
+                              disabled={actionLoading || isSelf}
+                              onClick={() => void handleUpdateAdminProfileAccess(profile, { role: 'customer' })}
+                              className="px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 text-[11px] font-bold disabled:opacity-50"
+                            >
+                              Rebaixar
+                            </button>
+                          )}
+
+                          {profile.status === 'blocked' ? (
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={() => void handleUpdateAdminProfileAccess(profile, { status: 'active' })}
+                              className="px-3 py-1.5 rounded-xl border border-emerald-100 bg-white hover:bg-emerald-50 text-emerald-700 text-[11px] font-bold disabled:opacity-60"
+                            >
+                              Reativar
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={actionLoading || isSelf}
+                              onClick={() => void handleUpdateAdminProfileAccess(profile, { status: 'blocked' })}
+                              className="px-3 py-1.5 rounded-xl border border-red-100 bg-white hover:bg-red-50 text-red-600 text-[11px] font-bold disabled:opacity-50"
+                            >
+                              Bloquear
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* TAB 5: Product stock and batch control */}
         {activeTab === 'batches' && (
@@ -1285,7 +1593,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                     >
                       <div className="flex items-center gap-3 min-w-0">
                         <div className="w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-150 flex items-center justify-center text-2xl shrink-0">
-                          {product.emoji || '🍽️'}
+                          <ProductIcon icon={product.emoji} className="w-8 h-8 text-2xl" />
                         </div>
 
                         <div className="min-w-0">
@@ -1509,36 +1817,49 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                     </div>
                   </div>
 
-                  <div>
+                  <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-zinc-600 mb-1">
                       Ícone ou Emoji *
                     </label>
-                    <div className="flex gap-2">
+
+                    <div className="space-y-2">
                       <input
                         id="form-product-emoji"
                         type="text"
-                        value={formEmoji}
+                        value={formEmoji === SNACK_BAG_ICON ? 'Pacote de salgadinho' : formEmoji}
                         onChange={(e) => setFormEmoji(e.target.value)}
-                        placeholder="🍔"
-                        maxLength={2}
-                        className="w-14 text-center py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-lg outline-none"
+                        onFocus={() => {
+                          if (formEmoji === SNACK_BAG_ICON) setFormEmoji('');
+                        }}
+                        placeholder="🥟 ou Pacote"
+                        maxLength={24}
+                        className="w-20 text-center py-2 bg-zinc-50 border border-zinc-200 rounded-xl text-lg outline-none"
                       />
-                      {/* Fast Emojis picker bar */}
-                      <div className="flex-1 flex gap-1 overflow-x-auto p-1.5 bg-zinc-50 border border-zinc-200 rounded-xl no-scrollbar self-center justify-around">
+
+                      {/* Fast Emojis picker grid */}
+                      <div className="w-full grid grid-cols-5 sm:grid-cols-8 gap-2 p-2 bg-zinc-50 border border-zinc-200 rounded-xl">
                         {POPULAR_EMOJIS.map((emj) => (
                           <button
                             key={emj}
                             type="button"
                             onClick={() => setFormEmoji(emj)}
-                            className={`p-0.5 text-base hover:scale-125 transition-transform rounded cursor-pointer ${
-                              formEmoji === emj ? 'bg-amber-100 scale-110' : ''
-                            }`}
+                            title={emj === SNACK_BAG_ICON ? 'Selecionar pacote de salgadinho' : 'Selecionar emoji ' + emj}
+                            aria-label={emj === SNACK_BAG_ICON ? 'Selecionar pacote de salgadinho' : 'Selecionar emoji ' + emj}
+                            className={
+                              formEmoji === emj
+                                ? 'w-10 h-10 flex items-center justify-center text-xl rounded-xl cursor-pointer border bg-amber-100 border-amber-300 shadow-sm'
+                                : 'w-10 h-10 flex items-center justify-center text-xl rounded-xl cursor-pointer border bg-white border-zinc-150 hover:border-amber-300 hover:bg-amber-50'
+                            }
                           >
-                            {emj}
+                            <ProductIcon icon={emj} className="w-7 h-7 text-xl" />
                           </button>
                         ))}
                       </div>
                     </div>
+
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Escolha um ícone rápido ou digite outro emoji manualmente.
+                    </p>
                   </div>
                 </div>
 

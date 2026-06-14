@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type ChangeEvent, type FormEvent } from 'react';
 import {
   Search,
   Copy,
@@ -15,11 +15,18 @@ import {
   Clock,
   Sparkles,
   ShoppingBag,
-  DollarSign
+  DollarSign,
+  User,
+  Briefcase,
+  Upload,
+  RefreshCw,
+  Save,
+  LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Product, StoreSetting } from '../types';
-import { createSupabaseSale, type SupabaseCustomerProfile } from '../features/supabase/supabaseCoreDataService';
+import { Product, StoreSetting, CustomerRegistration } from '../types';
+import { createSupabaseSale, updateCurrentCustomerProfile, type SupabaseCustomerProfile } from '../features/supabase/supabaseCoreDataService';
+import { ProductIcon, getProductIconText } from './ProductIcon';
 import { supabase } from '../lib/supabaseClient';
 
 interface CustomerViewProps {
@@ -28,9 +35,10 @@ interface CustomerViewProps {
   currentTable?: string | null;
   onTableChange?: (table: string | null) => void;
   onOpenScanner?: () => void;
-  customerProfile?: any;
+  customerProfile?: CustomerRegistration | null;
   onLogout?: () => void;
   onCoreDataChanged?: () => Promise<void> | void;
+  onProfileUpdated?: (profile: CustomerRegistration) => void;
 }
 
 export default function CustomerView({
@@ -41,12 +49,24 @@ export default function CustomerView({
   onOpenScanner,
   customerProfile,
   onLogout,
-  onCoreDataChanged
+  onCoreDataChanged,
+  onProfileUpdated
 }: CustomerViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [menuViewMode, setMenuViewMode] = useState<'minimal' | 'list' | 'grid' | 'cards'>('cards');
   const [copiedPix, setCopiedPix] = useState(false);
   const [cartNotice, setCartNotice] = useState<string | null>(null);
+
+  // Editable customer profile state
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileWorkplace, setProfileWorkplace] = useState('');
+  const [profileShiftHours, setProfileShiftHours] = useState('');
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState('');
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSaved, setProfileSaved] = useState(false);
 
   // Simple shopping cart state
   const [cart, setCart] = useState<{ [productId: string]: number }>({});
@@ -137,6 +157,96 @@ export default function CustomerView({
   const cartItemsCount = useMemo(() => {
     return Object.values(cart).reduce((sum: number, qty: number) => sum + qty, 0);
   }, [cart]);
+
+  const handleOpenProfileModal = () => {
+    if (!customerProfile) return;
+
+    setProfileName(customerProfile.name || '');
+    setProfileWorkplace(customerProfile.workplace || '');
+    setProfileShiftHours(customerProfile.shiftHours || '');
+    setProfilePhotoUrl(customerProfile.photoUrl || '');
+    setProfileError(null);
+    setProfileSaved(false);
+    setIsProfileModalOpen(true);
+  };
+
+  const handleProfilePhotoUpload = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    if (file.size > 1000000) {
+      setProfileError('A imagem selecionada é muito grande. Escolha uma foto com menos de 1MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        setProfilePhotoUrl(reader.result);
+        setProfileError(null);
+      }
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveCustomerProfile = async (e: FormEvent) => {
+    e.preventDefault();
+
+    if (!customerProfile) return;
+
+    const authUserId = customerProfile.uid || customerProfile.id;
+
+    if (!authUserId) {
+      setProfileError('Não foi possível identificar sua sessão de usuário.');
+      return;
+    }
+
+    if (!profileName.trim() || !profileWorkplace.trim() || !profileShiftHours.trim() || !profilePhotoUrl) {
+      setProfileError('Preencha nome, local de trabalho, turno e foto de perfil.');
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileError(null);
+    setProfileSaved(false);
+
+    try {
+      const savedProfile = await updateCurrentCustomerProfile({
+        authUserId,
+        displayName: profileName.trim(),
+        workplace: profileWorkplace.trim(),
+        shiftHours: profileShiftHours.trim(),
+        photoUrl: profilePhotoUrl,
+      });
+
+      const updatedCustomerProfile: CustomerRegistration = {
+        id: savedProfile.id,
+        uid: savedProfile.authUserId,
+        name: savedProfile.displayName,
+        email: savedProfile.email,
+        workplace: savedProfile.workplace,
+        shiftHours: savedProfile.shiftHours,
+        photoUrl: savedProfile.photoUrl,
+        createdAt: savedProfile.createdAt || customerProfile.createdAt || new Date().toISOString(),
+      };
+
+      onProfileUpdated?.(updatedCustomerProfile);
+      setProfileSaved(true);
+
+      window.setTimeout(() => {
+        setIsProfileModalOpen(false);
+        setProfileSaved(false);
+      }, 700);
+    } catch (err) {
+      console.error('Erro ao atualizar perfil do cliente:', err);
+      setProfileError('Não foi possível salvar seu perfil. Verifique sua conexão e tente novamente.');
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   // Copy PIX Predefined Key Action
   const handleCopyPix = () => {
@@ -242,7 +352,7 @@ export default function CustomerView({
         const qty = qtyVal as number;
         const prod = products.find((p) => p.id === id);
         if (prod) {
-          itemsList += `\n• *${qty}x* ${prod.emoji || '🍽️'} ${prod.name} (R$ ${(prod.price * qty).toFixed(2)})`;
+          itemsList += `\n• *${qty}x* ${getProductIconText(prod.emoji)} ${prod.name} (R$ ${(prod.price * qty).toFixed(2)})`;
         }
       });
 
@@ -255,6 +365,32 @@ export default function CustomerView({
     const encodedText = encodeURIComponent(baseMsg);
     const waUrl = `https://wa.me/${number}?text=${encodedText}`;
     window.open(waUrl, '_blank');
+  };
+
+  const handleOpenAdminWhatsapp = () => {
+    const cleanNumber = (settings.whatsappNumber || '').replace(/\D/g, '');
+
+    if (!cleanNumber) {
+      window.alert('WhatsApp administrativo ainda não configurado. Solicite ao administrador cadastrar o número no painel.');
+      return;
+    }
+
+    const customerName = customerProfile?.name || 'Cliente';
+    const customerWorkplace = customerProfile?.workplace || 'Não informado';
+    const customerShift = customerProfile?.shiftHours || 'Não informado';
+
+    const message = [
+      'Olá! Quero falar com o admin do Cardápio Digital CIICC.',
+      '',
+      'Assunto: pedido, crítica, sugestão ou dúvida.',
+      '',
+      'Meus dados:',
+      `Nome: ${customerName}`,
+      `Local de trabalho: ${customerWorkplace}`,
+      `Turno: ${customerShift}`,
+    ].join('\n');
+
+    window.open(`https://wa.me/${cleanNumber}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
   // Secure checkout & acquisition confirmation
@@ -430,15 +566,31 @@ export default function CustomerView({
                     {customerProfile.name}
                   </span>
 
-                  {onLogout && (
+                  <div className="mt-1 flex items-center gap-2">
                     <button
+                      id="customer-profile-open-btn"
                       type="button"
-                      onClick={onLogout}
-                      className="mt-0.5 text-[10px] font-bold text-red-500 hover:text-red-650 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                      onClick={handleOpenProfileModal}
+                      className="w-6 h-6 rounded-lg bg-zinc-100 hover:bg-amber-100 text-zinc-600 hover:text-amber-700 flex items-center justify-center transition-colors cursor-pointer"
+                      title="Editar perfil"
+                      aria-label="Editar perfil"
                     >
-                      Sair
+                      <User className="w-3.5 h-3.5" />
                     </button>
-                  )}
+
+                    {onLogout && (
+                      <button
+                        id="customer-profile-signout-btn"
+                        type="button"
+                        onClick={onLogout}
+                        className="w-6 h-6 rounded-lg bg-zinc-100 hover:bg-red-50 text-red-500 hover:text-red-650 flex items-center justify-center transition-colors cursor-pointer"
+                        title="Sair"
+                        aria-label="Sair"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -485,20 +637,55 @@ export default function CustomerView({
             )}
           </div>
 
-          {/* Categories Sliding Container */}
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+        </div>
+      </div>
+
+
+      {/* Product Filter and Menu View Mode Selector */}
+      <div id="menu-view-mode-selector" className="px-4 -mt-2 pb-2">
+        <div className="max-w-2xl mx-auto rounded-2xl bg-white border border-zinc-200 p-1 shadow-xs flex items-center gap-1">
+          <label className="sr-only" htmlFor="product-category-menu">
+            Filtrar produtos por categoria
+          </label>
+
+          <select
+            id="product-category-menu"
+            value={selectedCategory}
+            onChange={(e) => setSelectedCategory(e.target.value)}
+            className="min-w-0 flex-1 h-10 px-3 rounded-xl bg-zinc-50 border border-zinc-100 text-[11px] font-black text-zinc-800 outline-none focus:border-amber-400 cursor-pointer"
+            title="Filtrar produtos por categoria"
+          >
             {categories.map((cat) => (
+              <option key={cat} value={cat}>
+                {cat === 'all' ? '🍱 Todos os Produtos' : cat}
+              </option>
+            ))}
+          </select>
+
+          <div className="h-8 w-px bg-zinc-200 mx-0.5 shrink-0" />
+
+          <div className="grid grid-cols-4 gap-1 shrink-0">
+            {[
+              { id: 'minimal', label: 'Minimalista', icon: '☰' },
+              { id: 'list', label: 'Lista', icon: '☷' },
+              { id: 'grid', label: 'Grade', icon: '▦' },
+              { id: 'cards', label: 'Atual', icon: '▣' },
+            ].map((view) => (
               <button
-                id={`cat-filter-btn-${cat}`}
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`px-4.5 py-2 mr-0.5 text-xs font-semibold rounded-full select-none shrink-0 transition-colors cursor-pointer ${
-                  selectedCategory === cat
-                    ? 'bg-zinc-900 text-white'
-                    : 'bg-white border border-zinc-200 text-zinc-650 hover:bg-zinc-100 hover:border-zinc-300'
-                }`}
+                key={view.id}
+                type="button"
+                id={'menu-view-' + view.id + '-btn'}
+                onClick={() => setMenuViewMode(view.id as 'minimal' | 'list' | 'grid' | 'cards')}
+                title={view.label}
+                aria-label={'Visualização ' + view.label}
+                className={
+                  menuViewMode === view.id
+                    ? 'w-10 h-10 rounded-xl text-[10px] font-black bg-zinc-900 text-white shadow-sm flex items-center justify-center'
+                    : 'w-10 h-10 rounded-xl text-[10px] font-black text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 flex items-center justify-center'
+                }
               >
-                {cat === 'all' ? '🍔 Todos os Produtos' : cat}
+                <span className="text-base leading-none" aria-hidden="true">{view.icon}</span>
+                <span className="sr-only">{view.label}</span>
               </button>
             ))}
           </div>
@@ -506,47 +693,280 @@ export default function CustomerView({
       </div>
 
       {/* Main product card listing */}
-      <div className="px-4 py-6">
+      <div className="px-4 py-6 pb-40">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-12 px-6">
             <Utensils className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
-            <h3 className="font-display font-medium text-zinc-800 text-base">Nenhum prato disponível</h3>
+            <h3 className="font-display font-medium text-zinc-800 text-base">Nenhum produto disponível</h3>
             <p className="text-zinc-500 text-xs mt-1 px-8 leading-relaxed">
               Não encontramos ofertas correspondentes nesta categoria ou busca.
             </p>
+          </div>
+        ) : menuViewMode === 'minimal' ? (
+          <div className="bg-white border border-zinc-150 rounded-3xl overflow-hidden divide-y divide-zinc-100 shadow-xs">
+            {filteredProducts.map((product) => {
+              const insideCartCount = cart[product.id] || 0;
+
+              return (
+                <div
+                  key={product.id}
+                  id={'product-minimal-row-' + product.id}
+                  className={insideCartCount > 0 ? 'px-4 py-3 flex items-center gap-3 bg-sky-50' : 'px-4 py-3 flex items-center gap-3 bg-white'}
+                >
+                  <ProductIcon icon={product.emoji} className="w-7 h-7 text-xl shrink-0" />
+
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-3">
+                      <h4 className="font-black text-zinc-900 text-sm truncate">{product.name}</h4>
+                      <span className="font-mono font-black text-zinc-900 text-xs shrink-0">
+                        R$ {product.price.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 mt-0.5">
+                      <span className="text-[10px] font-bold text-amber-600 uppercase truncate">
+                        {product.category}
+                      </span>
+                      <span className="text-[10px] font-black text-emerald-700 shrink-0">
+                        {product.stockAvailable ?? 0} disp.
+                      </span>
+                    </div>
+                  </div>
+
+                  {insideCartCount > 0 ? (
+                    <div
+                      id={'cart-minimal-controls-' + product.id}
+                      className="flex items-center gap-1 bg-white border border-zinc-200 rounded-full px-1 py-1 shrink-0"
+                    >
+                      <button
+                        type="button"
+                        id={'decrease-minimal-btn-' + product.id}
+                        onClick={() => handleRemoveFromCart(product.id)}
+                        className="w-8 h-8 rounded-full text-zinc-650 hover:text-rose-600 hover:bg-zinc-50 flex items-center justify-center cursor-pointer"
+                        title="Diminuir quantidade"
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="w-6 text-center text-xs font-black text-zinc-900">
+                        {insideCartCount}
+                      </span>
+                      <button
+                        type="button"
+                        id={'increase-minimal-btn-' + product.id}
+                        onClick={() => handleAddToCart(product.id)}
+                        disabled={insideCartCount >= (product.stockAvailable ?? 0)}
+                        className="w-8 h-8 rounded-full bg-zinc-900 text-white disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center cursor-pointer"
+                        title="Aumentar quantidade"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      id={'add-minimal-btn-' + product.id}
+                      onClick={() => handleAddToCart(product.id)}
+                      disabled={insideCartCount >= (product.stockAvailable ?? 0)}
+                      className="w-9 h-9 rounded-full bg-zinc-900 text-white text-lg font-black flex items-center justify-center disabled:bg-zinc-200 disabled:text-zinc-400 cursor-pointer"
+                      title="Adicionar"
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : menuViewMode === 'list' ? (
+          <div className="space-y-3">
+            {filteredProducts.map((product) => {
+              const insideCartCount = cart[product.id] || 0;
+
+              return (
+                <div
+                  key={product.id}
+                  id={'product-list-row-' + product.id}
+                  className={
+                    insideCartCount > 0
+                      ? 'rounded-2xl border p-3 flex items-center gap-3 shadow-xs bg-sky-50 border-sky-300 ring-2 ring-sky-100'
+                      : 'rounded-2xl border p-3 flex items-center gap-3 shadow-xs bg-white border-zinc-150'
+                  }
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0 overflow-hidden">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <ProductIcon icon={product.emoji} className="w-9 h-9 text-2xl" />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <span className="text-[9px] uppercase font-black text-amber-600 tracking-wider truncate block">
+                      {product.category}
+                    </span>
+                    <h4 className="font-display font-black text-zinc-900 text-sm truncate">{product.name}</h4>
+                    <p className="text-zinc-500 text-xs truncate">{product.description || 'Produto disponível.'}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="font-mono font-black text-zinc-900 text-xs">
+                        R$ {product.price.toFixed(2)}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-black uppercase">
+                        {product.stockAvailable ?? 0} disp.
+                      </span>
+                    </div>
+                  </div>
+
+                  {insideCartCount > 0 ? (
+                    <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-full px-2 py-1">
+                      <button
+                        onClick={() => handleRemoveFromCart(product.id)}
+                        className="w-7 h-7 rounded-full text-zinc-600 hover:bg-zinc-50 cursor-pointer"
+                      >
+                        -
+                      </button>
+                      <span className="w-5 text-center text-xs font-black">{insideCartCount}</span>
+                      <button
+                        onClick={() => handleAddToCart(product.id)}
+                        disabled={insideCartCount >= (product.stockAvailable ?? 0)}
+                        className="w-7 h-7 rounded-full text-amber-700 hover:bg-amber-50 disabled:text-zinc-300 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      id={'add-list-btn-' + product.id}
+                      onClick={() => handleAddToCart(product.id)}
+                      className="px-3 py-2 rounded-full bg-zinc-900 text-white text-xs font-black cursor-pointer"
+                    >
+                      +
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ) : menuViewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {filteredProducts.map((product) => {
+              const insideCartCount = cart[product.id] || 0;
+
+              return (
+                <div
+                  key={product.id}
+                  id={'product-grid-card-' + product.id}
+                  className={
+                    insideCartCount > 0
+                      ? 'rounded-3xl border p-3 flex flex-col min-h-[190px] shadow-xs bg-sky-50 border-sky-300 ring-2 ring-sky-100'
+                      : 'rounded-3xl border p-3 flex flex-col min-h-[190px] shadow-xs bg-white border-zinc-150'
+                  }
+                >
+                  <div className="w-full aspect-square max-h-24 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center overflow-hidden mb-2">
+                    {product.imageUrl ? (
+                      <img
+                        src={product.imageUrl}
+                        alt={product.name}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.currentTarget as HTMLImageElement).style.display = 'none';
+                        }}
+                      />
+                    ) : (
+                      <ProductIcon icon={product.emoji} className="w-12 h-12 text-4xl" />
+                    )}
+                  </div>
+
+                  <span className="text-[8px] uppercase font-black text-amber-600 tracking-wider truncate">
+                    {product.category}
+                  </span>
+                  <h4 className="font-display font-black text-zinc-900 text-xs leading-tight line-clamp-2 min-h-[32px]">
+                    {product.name}
+                  </h4>
+
+                  <div className="mt-auto pt-2 flex items-center justify-between gap-2">
+                    <span className="font-mono font-black text-zinc-900 text-xs">
+                      R$ {product.price.toFixed(2)}
+                    </span>
+                    {insideCartCount > 0 ? (
+                      <div
+                        id={'cart-grid-controls-' + product.id}
+                        className="flex items-center gap-1 bg-white border border-zinc-200 rounded-full px-1 py-1 shrink-0"
+                      >
+                        <button
+                          type="button"
+                          id={'decrease-grid-btn-' + product.id}
+                          onClick={() => handleRemoveFromCart(product.id)}
+                          className="w-7 h-7 rounded-full text-zinc-650 hover:text-rose-600 hover:bg-zinc-50 flex items-center justify-center cursor-pointer"
+                          title="Diminuir quantidade"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="w-5 text-center text-xs font-black text-zinc-900">
+                          {insideCartCount}
+                        </span>
+                        <button
+                          type="button"
+                          id={'increase-grid-btn-' + product.id}
+                          onClick={() => handleAddToCart(product.id)}
+                          disabled={insideCartCount >= (product.stockAvailable ?? 0)}
+                          className="w-7 h-7 rounded-full bg-zinc-900 text-white disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center cursor-pointer"
+                          title="Aumentar quantidade"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        id={'add-grid-btn-' + product.id}
+                        onClick={() => handleAddToCart(product.id)}
+                        disabled={insideCartCount >= (product.stockAvailable ?? 0)}
+                        className="w-8 h-8 rounded-full bg-zinc-900 text-white text-base font-black flex items-center justify-center disabled:bg-zinc-200 disabled:text-zinc-400 cursor-pointer"
+                      >
+                        +
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredProducts.map((product) => {
               const insideCartCount = cart[product.id] || 0;
+
               return (
                 <div
                   key={product.id}
-                  id={`product-card-${product.id}`}
-                  className={`relative rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 ${
-                                      insideCartCount > 0
-                                        ? 'bg-sky-50 border-2 border-sky-400 shadow-lg shadow-sky-500/15 ring-2 ring-sky-100'
-                                        : 'bg-white border border-zinc-150 shadow-xs hover:shadow-sm'
-                                    }`}
+                  id={'product-card-' + product.id}
+                  className={
+                    insideCartCount > 0
+                      ? 'relative rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 bg-sky-50 border-2 border-sky-400 shadow-lg shadow-sky-500/15 ring-2 ring-sky-100'
+                      : 'relative rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 bg-white border border-zinc-150 shadow-xs hover:shadow-sm'
+                  }
                 >
-
                   {insideCartCount > 0 && (
                     <div
-                      id={`product-selected-badge-${product.id}`}
+                      id={'product-selected-badge-' + product.id}
                       className="absolute top-3 right-3 z-10 rounded-full bg-sky-600 px-2.5 py-1 text-[10px] font-black uppercase tracking-wide text-white shadow-md"
                     >
                       Selecionado
                     </div>
                   )}
 
-                  {/* Card upper visual & text */}
                   <div className="p-4 flex gap-4">
-                    {/* Image or Emoji Slot */}
-                    <div className={`relative w-20 h-20 rounded-xl shrink-0 overflow-hidden flex items-center justify-center text-3xl select-none transition-colors ${
-                                              insideCartCount > 0
-                                                ? 'bg-sky-100 border border-sky-300'
-                                                : 'bg-zinc-50 border border-zinc-100'
-                                            }`}>
+                    <div className={
+                      insideCartCount > 0
+                        ? 'relative w-20 h-20 rounded-xl shrink-0 overflow-hidden flex items-center justify-center text-3xl select-none transition-colors bg-sky-100 border border-sky-300'
+                        : 'relative w-20 h-20 rounded-xl shrink-0 overflow-hidden flex items-center justify-center text-3xl select-none transition-colors bg-zinc-50 border border-zinc-100'
+                    }>
                       {product.imageUrl ? (
                         <img
                           src={product.imageUrl}
@@ -554,18 +974,15 @@ export default function CustomerView({
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            // Fallback if image fails to load
                             (e.currentTarget as HTMLImageElement).style.display = 'none';
                           }}
                         />
                       ) : null}
-                      {/* Emoji layer always serves as fallback or primary symbol */}
                       <span className={product.imageUrl ? 'hidden' : 'block'}>
-                        {product.emoji || '🍽️'}
+                        <ProductIcon icon={product.emoji} className="w-11 h-11 text-3xl" />
                       </span>
                     </div>
 
-                    {/* Metadata detail block */}
                     <div className="min-w-0 flex-1">
                       <span className="text-[10px] uppercase font-bold text-amber-600 tracking-wider">
                         {product.category}
@@ -582,21 +999,19 @@ export default function CustomerView({
                     </div>
                   </div>
 
-                  {/* Card Actions Bottom bar */}
-                  <div className={`px-4 py-3 border-t flex items-center justify-between transition-colors ${
-                                      insideCartCount > 0
-                                        ? 'bg-sky-100/80 border-sky-200'
-                                        : 'bg-zinc-50 border-zinc-100'
-                                    }`}>
+                  <div className={
+                    insideCartCount > 0
+                      ? 'px-4 py-3 border-t flex items-center justify-between transition-colors bg-sky-100/80 border-sky-200'
+                      : 'px-4 py-3 border-t flex items-center justify-between transition-colors bg-zinc-50 border-zinc-100'
+                  }>
                     <span className="font-mono font-bold text-zinc-800 text-sm">
                       R$ {product.price.toFixed(2)}
                     </span>
 
-                    {/* Cart Addition Controls */}
                     {insideCartCount > 0 ? (
-                      <div id={`cart-controls-${product.id}`} className="flex items-center gap-2 bg-white border border-zinc-200 rounded-full py-1 px-2">
+                      <div id={'cart-controls-' + product.id} className="flex items-center gap-2 bg-white border border-zinc-200 rounded-full py-1 px-2">
                         <button
-                          id={`decrease-qty-btn-${product.id}`}
+                          id={'decrease-qty-btn-' + product.id}
                           onClick={() => handleRemoveFromCart(product.id)}
                           className="p-1 text-zinc-650 hover:text-rose-600 hover:bg-zinc-50 rounded-full transition-colors cursor-pointer"
                         >
@@ -606,7 +1021,7 @@ export default function CustomerView({
                           {insideCartCount}
                         </span>
                         <button
-                          id={`increase-qty-btn-${product.id}`}
+                          id={'increase-qty-btn-' + product.id}
                           onClick={() => handleAddToCart(product.id)}
                           disabled={insideCartCount >= (product.stockAvailable ?? 0)}
                           className="p-1 text-zinc-650 hover:text-amber-600 hover:bg-zinc-50 disabled:text-zinc-300 disabled:cursor-not-allowed rounded-full transition-colors cursor-pointer"
@@ -616,7 +1031,7 @@ export default function CustomerView({
                       </div>
                     ) : (
                       <button
-                        id={`add-to-cart-btn-${product.id}`}
+                        id={'add-to-cart-btn-' + product.id}
                         onClick={() => handleAddToCart(product.id)}
                         className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 hover:scale-105 active:scale-95 text-white font-semibold text-xs rounded-full cursor-pointer transition-all flex items-center gap-1 shrink-0"
                       >
@@ -631,6 +1046,159 @@ export default function CustomerView({
           </div>
         )}
       </div>
+
+      <AnimatePresence>
+        {isProfileModalOpen && customerProfile && (
+          <div id="customer-profile-modal" className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 18 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 18 }}
+              className="w-full sm:max-w-md max-h-[92dvh] bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col"
+            >
+              <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-display font-black text-base text-zinc-900">
+                    Meu Perfil
+                  </h3>
+                  <p className="text-[11px] text-zinc-500 font-medium">
+                    Atualize seus dados de identificação.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsProfileModalOpen(false)}
+                  className="w-9 h-9 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-500 flex items-center justify-center"
+                  title="Fechar perfil"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveCustomerProfile} className="p-5 space-y-4 overflow-y-auto">
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-2xl bg-amber-50 border border-amber-100 overflow-hidden flex items-center justify-center shrink-0">
+                    {profilePhotoUrl ? (
+                      <img
+                        src={profilePhotoUrl}
+                        alt="Foto do perfil"
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <User className="w-8 h-8 text-amber-500" />
+                    )}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <label className="w-full px-3 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-black text-xs rounded-xl cursor-pointer transition-colors flex items-center justify-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      Trocar foto
+                      <input type="file" accept="image/*" onChange={handleProfilePhotoUpload} className="hidden" />
+                    </label>
+                    <p className="text-[10px] text-zinc-500 mt-1 leading-relaxed">
+                      Use uma imagem com até 1MB.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] uppercase font-black text-zinc-500 tracking-wider flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5" />
+                    Nome
+                  </span>
+                  <input
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-zinc-900 text-sm outline-none focus:border-amber-500 transition-colors"
+                    placeholder="Seu nome completo"
+                  />
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] uppercase font-black text-zinc-500 tracking-wider flex items-center gap-1.5">
+                    <Briefcase className="w-3.5 h-3.5" />
+                    Local de trabalho
+                  </span>
+                  <input
+                    value={profileWorkplace}
+                    onChange={(e) => setProfileWorkplace(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-zinc-900 text-sm outline-none focus:border-amber-500 transition-colors"
+                    placeholder="Ex: Recepção, Administrativo, Galpão..."
+                  />
+                </label>
+
+                <label className="block space-y-1.5">
+                  <span className="text-[10px] uppercase font-black text-zinc-500 tracking-wider flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    Turno / horário
+                  </span>
+                  <input
+                    value={profileShiftHours}
+                    onChange={(e) => setProfileShiftHours(e.target.value)}
+                    className="w-full bg-zinc-50 border border-zinc-200 rounded-2xl px-4 py-3 text-zinc-900 text-sm outline-none focus:border-amber-500 transition-colors"
+                    placeholder="Ex: 08:00 às 17:00"
+                  />
+                </label>
+
+                {profileError && (
+                  <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-xs font-bold text-red-700">
+                    {profileError}
+                  </div>
+                )}
+
+                {profileSaved && (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs font-bold text-emerald-700 flex items-center gap-2">
+                    <Check className="w-4 h-4" />
+                    Perfil atualizado com sucesso.
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsProfileModalOpen(false)}
+                    className="flex-1 py-3 rounded-2xl border border-zinc-200 text-zinc-600 font-bold text-xs bg-white hover:bg-zinc-50"
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="submit"
+                    disabled={profileSaving}
+                    className="flex-1 py-3 rounded-2xl bg-zinc-900 hover:bg-zinc-800 disabled:opacity-60 text-white font-black text-xs flex items-center justify-center gap-2"
+                  >
+                    {profileSaving ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="w-4 h-4" />
+                        Salvar perfil
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Floating WhatsApp Admin Contact */}
+      <button
+        id="floating-admin-whatsapp-btn"
+        type="button"
+        onClick={handleOpenAdminWhatsapp}
+        className="fixed right-4 bottom-28 z-50 w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-700/25 border border-emerald-300 flex items-center justify-center transition-all active:scale-95"
+        title="Chamar admin no WhatsApp"
+        aria-label="Chamar admin no WhatsApp para pedidos, críticas ou sugestões"
+      >
+        <Phone className="w-6 h-6" />
+      </button>
 
       {/* Floating Bottom Adhesive Bar (PIX copy and WhatsApp help options) */}
       <div id="sticky-checkout-deck" className="fixed bottom-0 inset-x-0 z-40 bg-orange-100/95 border-t border-orange-300 shadow-xl px-4 py-4 backdrop-blur-md">

@@ -223,6 +223,7 @@ export default function App() {
                   settings={settings}
                   customerProfile={customerProfile}
                   onLogout={handleCustomerLogout}
+                  onProfileUpdated={(profile) => setCustomerProfile(profile)}
                 />
               </motion.div>
             )

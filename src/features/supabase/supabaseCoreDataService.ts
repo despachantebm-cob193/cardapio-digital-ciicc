@@ -40,6 +40,12 @@ export type SupabaseCustomerProfile = {
   updatedAt?: string;
 };
 
+export type SupabaseAdminProfile = SupabaseCustomerProfile;
+
+export type SupabaseProfileRole = 'customer' | 'admin';
+
+export type SupabaseProfileStatus = 'active' | 'inactive' | 'blocked';
+
 export type SupabaseSaleItemInput = {
   productId: string | null;
   name: string;
@@ -302,6 +308,34 @@ export async function upsertCustomerProfile(input: {
   return mapProfile(data);
 }
 
+export async function updateCurrentCustomerProfile(input: {
+  authUserId: string;
+  displayName: string;
+  workplace: string;
+  shiftHours: string;
+  photoUrl: string;
+}): Promise<SupabaseCustomerProfile> {
+  const client = requireSupabase();
+
+  const { data, error } = await client
+    .from('profiles')
+    .update({
+      display_name: input.displayName,
+      workplace: input.workplace,
+      shift_hours: input.shiftHours,
+      photo_url: input.photoUrl,
+    })
+    .eq('auth_user_id', input.authUserId)
+    .select('id, auth_user_id, email, display_name, workplace, shift_hours, photo_url, role, status, created_at, updated_at')
+    .single<ProfileRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapProfile(data);
+}
+
 export async function createSupabaseSale(input: SupabaseSaleInput): Promise<string> {
   const client = requireSupabase();
 
@@ -442,4 +476,64 @@ export async function deleteSupabaseSale(id: string): Promise<void> {
   if (error) {
     throw error;
   }
+}
+
+
+export async function listSupabaseProfilesForAdmin(): Promise<SupabaseAdminProfile[]> {
+  const client = requireSupabase();
+
+  const { data, error } = await client
+    .from('profiles')
+    .select('id, auth_user_id, email, display_name, workplace, shift_hours, photo_url, role, status, created_at, updated_at')
+    .order('role', { ascending: true })
+    .order('display_name', { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  return (data || []).map((row) => mapProfile(row as ProfileRow));
+}
+
+export async function updateSupabaseProfileAdminAccess(
+  profileId: string,
+  changes: {
+    role?: SupabaseProfileRole;
+    status?: SupabaseProfileStatus;
+  },
+): Promise<SupabaseAdminProfile> {
+  const client = requireSupabase();
+
+  const payload: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (changes.role !== undefined) payload.role = changes.role;
+  if (changes.status !== undefined) payload.status = changes.status;
+
+  const { data, error } = await client
+    .from('profiles')
+    .update(payload)
+    .eq('id', profileId)
+    .select('id, auth_user_id, email, display_name, workplace, shift_hours, photo_url, role, status, created_at, updated_at')
+    .single<ProfileRow>();
+
+  if (error) {
+    throw error;
+  }
+
+  return mapProfile(data);
+}
+
+
+export async function getCurrentSupabaseAuthUserId(): Promise<string | null> {
+  const client = requireSupabase();
+
+  const { data, error } = await client.auth.getUser();
+
+  if (error) {
+    return null;
+  }
+
+  return data.user?.id ?? null;
 }
