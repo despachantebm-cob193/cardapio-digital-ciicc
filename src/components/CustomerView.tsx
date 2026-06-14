@@ -21,11 +21,14 @@ import {
   Upload,
   RefreshCw,
   Save,
-  LogOut
+  LogOut,
+  History,
+  ExternalLink,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, StoreSetting, CustomerRegistration } from '../types';
-import { createSupabaseSale, updateCurrentCustomerProfile, type SupabaseCustomerProfile } from '../features/supabase/supabaseCoreDataService';
+import { createSupabaseSale, updateCurrentCustomerProfile, listSupabaseSalesByCustomerProfileId, type SupabaseCustomerProfile, type SupabaseSale } from '../features/supabase/supabaseCoreDataService';
 import { ProductIcon, getProductIconText } from './ProductIcon';
 import { supabase } from '../lib/supabaseClient';
 
@@ -54,7 +57,7 @@ export default function CustomerView({
 }: CustomerViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [menuViewMode, setMenuViewMode] = useState<'minimal' | 'list' | 'grid' | 'cards'>('cards');
+  const [menuViewMode, setMenuViewMode] = useState<'minimal' | 'list' | 'grid' | 'cards'>('list');
   const [copiedPix, setCopiedPix] = useState(false);
   const [cartNotice, setCartNotice] = useState<string | null>(null);
 
@@ -67,6 +70,12 @@ export default function CustomerView({
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSaved, setProfileSaved] = useState(false);
+
+  // Customer purchase history state
+  const [isPurchaseHistoryOpen, setIsPurchaseHistoryOpen] = useState(false);
+  const [purchaseHistory, setPurchaseHistory] = useState<SupabaseSale[]>([]);
+  const [purchaseHistoryLoading, setPurchaseHistoryLoading] = useState(false);
+  const [purchaseHistoryError, setPurchaseHistoryError] = useState<string | null>(null);
 
   // Simple shopping cart state
   const [cart, setCart] = useState<{ [productId: string]: number }>({});
@@ -367,6 +376,29 @@ export default function CustomerView({
     window.open(waUrl, '_blank');
   };
 
+  const handleOpenPurchaseHistory = async () => {
+    setIsPurchaseHistoryOpen(true);
+    setPurchaseHistoryError(null);
+
+    if (!customerProfile?.id) {
+      setPurchaseHistory([]);
+      setPurchaseHistoryError('Não foi possível identificar seu perfil para carregar o histórico.');
+      return;
+    }
+
+    setPurchaseHistoryLoading(true);
+
+    try {
+      const sales = await listSupabaseSalesByCustomerProfileId(customerProfile.id);
+      setPurchaseHistory(sales);
+    } catch (err) {
+      console.error('Erro ao carregar histórico de aquisições:', err);
+      setPurchaseHistoryError('Não foi possível carregar seu histórico de aquisições agora.');
+    } finally {
+      setPurchaseHistoryLoading(false);
+    }
+  };
+
   const handleOpenAdminWhatsapp = () => {
     const cleanNumber = (settings.whatsappNumber || '').replace(/\D/g, '');
 
@@ -523,20 +555,20 @@ export default function CustomerView({
   };
 
   return (
-    <div id="customer-view-container" className="min-h-screen bg-zinc-50/50 pb-28">
+    <div id="customer-view-container" className="min-h-screen bg-gradient-to-b from-orange-50 via-zinc-50 to-white pb-32">
       {/* Visual Header */}
-      <div className="relative overflow-hidden bg-gradient-to-b from-amber-500/20 to-transparent pt-6 pb-2">
-        <div className="px-4">
+      <div className="sticky top-0 z-40 overflow-hidden bg-orange-50/95 backdrop-blur-md border-b border-orange-100/80 pt-4 pb-2 shadow-sm shadow-orange-100/60">
+        <div className="px-4 max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <div className="w-10 h-10 rounded-xl bg-amber-500 flex items-center justify-center text-lg text-black font-bold">
                 🍳
               </div>
               <div className="min-w-0">
-                <h1 className="font-display font-extrabold text-xl text-zinc-900 leading-tight truncate">
+                <h1 className="font-display font-black text-2xl text-zinc-950 leading-tight truncate tracking-tight">
                   {settings.storeName || 'Cardápio Digital'}
                 </h1>
-                <p className="text-zinc-500 text-[10px] uppercase font-bold tracking-wider">
+                <p className="text-orange-700/75 text-[10px] uppercase font-black tracking-wider">
                   Menu Digital Interativo
                 </p>
               </div>
@@ -546,23 +578,23 @@ export default function CustomerView({
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="ml-3 shrink-0 max-w-[54%] sm:max-w-none rounded-2xl bg-white/75 backdrop-blur-xs border border-zinc-200/70 px-2.5 py-2 shadow-2xs flex items-center gap-2"
+                className="ml-3 shrink-0 max-w-[54%] sm:max-w-none rounded-2xl bg-white/90 backdrop-blur-md border border-orange-100 px-2.5 py-2 shadow-md shadow-orange-100/60 flex items-center gap-2"
               >
                 {customerProfile.photoUrl ? (
                   <img
                     src={customerProfile.photoUrl}
                     alt={customerProfile.name}
                     referrerPolicy="no-referrer"
-                    className="w-8 h-8 rounded-xl object-cover border border-amber-500/15 shrink-0"
+                    className="w-9 h-9 rounded-2xl object-cover border border-orange-200 shrink-0"
                   />
                 ) : (
-                  <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center text-xs font-bold text-amber-700 shrink-0">
+                  <div className="w-9 h-9 rounded-2xl bg-orange-100 flex items-center justify-center text-xs font-black text-orange-700 shrink-0">
                     {customerProfile.name.charAt(0)}
                   </div>
                 )}
 
                 <div className="min-w-0 flex flex-col items-start leading-tight">
-                  <span className="max-w-[96px] sm:max-w-[180px] truncate text-xs font-bold text-zinc-900">
+                  <span className="max-w-[112px] sm:max-w-[190px] truncate text-xs font-black text-zinc-950">
                     {customerProfile.name}
                   </span>
 
@@ -576,6 +608,17 @@ export default function CustomerView({
                       aria-label="Editar perfil"
                     >
                       <User className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                      id="customer-purchase-history-btn"
+                      type="button"
+                      onClick={handleOpenPurchaseHistory}
+                      className="w-6 h-6 rounded-lg bg-zinc-100 hover:bg-emerald-100 text-zinc-600 hover:text-emerald-700 flex items-center justify-center transition-colors cursor-pointer"
+                      title="Histórico de compras notificadas"
+                      aria-label="Histórico de compras notificadas"
+                    >
+                      <History className="w-3.5 h-3.5" />
                     </button>
 
                     {onLogout && (
@@ -616,15 +659,15 @@ export default function CustomerView({
           )}
 
           {/* Search bar input placeholder */}
-          <div className="relative mb-4">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 w-4.5 h-4.5" />
+          <div className="relative mb-5 group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-orange-500/70 w-5 h-5" />
             <input
               id="product-search-bar"
               type="text"
               placeholder="Pesquisar por produto, ingrediente ou bebida..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 text-sm bg-white border border-zinc-200/80 rounded-2xl text-zinc-800 outline-none focus:border-amber-500 transition-all shadow-xs"
+              className="w-full pl-12 pr-4 py-4 text-sm bg-white border border-white rounded-[24px] text-zinc-900 outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-500/15 transition-all shadow-lg shadow-orange-100/60 placeholder:text-zinc-400"
             />
             {searchQuery && (
               <button
@@ -642,8 +685,8 @@ export default function CustomerView({
 
 
       {/* Product Filter and Menu View Mode Selector */}
-      <div id="menu-view-mode-selector" className="px-4 -mt-2 pb-2">
-        <div className="max-w-2xl mx-auto rounded-2xl bg-white border border-zinc-200 p-1 shadow-xs flex items-center gap-1">
+      <div id="menu-view-mode-selector" className="px-4 -mt-1 pb-4">
+        <div className="max-w-2xl mx-auto rounded-[24px] bg-white border border-white p-1.5 shadow-lg shadow-orange-100/60 flex items-center gap-1.5">
           <label className="sr-only" htmlFor="product-category-menu">
             Filtrar produtos por categoria
           </label>
@@ -652,7 +695,7 @@ export default function CustomerView({
             id="product-category-menu"
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="min-w-0 flex-1 h-10 px-3 rounded-xl bg-zinc-50 border border-zinc-100 text-[11px] font-black text-zinc-800 outline-none focus:border-amber-400 cursor-pointer"
+            className="min-w-0 flex-1 h-12 px-3.5 rounded-[18px] bg-orange-50/70 border border-orange-100 text-[11px] font-black text-zinc-900 outline-none focus:border-orange-300 focus:bg-white cursor-pointer"
             title="Filtrar produtos por categoria"
           >
             {categories.map((cat) => (
@@ -680,8 +723,8 @@ export default function CustomerView({
                 aria-label={'Visualização ' + view.label}
                 className={
                   menuViewMode === view.id
-                    ? 'w-10 h-10 rounded-xl text-[10px] font-black bg-zinc-900 text-white shadow-sm flex items-center justify-center'
-                    : 'w-10 h-10 rounded-xl text-[10px] font-black text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 flex items-center justify-center'
+                    ? 'w-12 h-12 rounded-[18px] text-[10px] font-black bg-zinc-950 text-white shadow-md shadow-zinc-300/70 flex items-center justify-center'
+                    : 'w-12 h-12 rounded-[18px] text-[10px] font-black text-zinc-500 hover:text-zinc-950 hover:bg-orange-50 flex items-center justify-center'
                 }
               >
                 <span className="text-base leading-none" aria-hidden="true">{view.icon}</span>
@@ -693,7 +736,7 @@ export default function CustomerView({
       </div>
 
       {/* Main product card listing */}
-      <div className="px-4 py-6 pb-40">
+      <div className="px-4 pt-4 pb-44 max-w-2xl mx-auto">
         {filteredProducts.length === 0 ? (
           <div className="text-center py-12 px-6">
             <Utensils className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
@@ -703,7 +746,7 @@ export default function CustomerView({
             </p>
           </div>
         ) : menuViewMode === 'minimal' ? (
-          <div className="bg-white border border-zinc-150 rounded-3xl overflow-hidden divide-y divide-zinc-100 shadow-xs">
+          <div className="bg-white border border-orange-200 rounded-[30px] overflow-hidden divide-y divide-orange-100 shadow-[0_20px_55px_rgba(251,146,60,0.25)] ring-1 ring-orange-100">
             {filteredProducts.map((product) => {
               const insideCartCount = cart[product.id] || 0;
 
@@ -711,7 +754,7 @@ export default function CustomerView({
                 <div
                   key={product.id}
                   id={'product-minimal-row-' + product.id}
-                  className={insideCartCount > 0 ? 'px-4 py-3 flex items-center gap-3 bg-sky-50' : 'px-4 py-3 flex items-center gap-3 bg-white'}
+                  className={insideCartCount > 0 ? 'relative overflow-hidden px-4 py-4 flex items-center gap-3 bg-gradient-to-r from-red-500 via-orange-400 to-yellow-200 border-l-[7px] border-red-700 shadow-[0_18px_45px_rgba(234,88,12,0.55)] ring-4 ring-orange-300/80 scale-[1.015] transition-all active:scale-[0.99]' : 'relative px-4 py-4 flex items-center gap-3 bg-white hover:bg-orange-50/90 hover:shadow-[0_12px_30px_rgba(251,146,60,0.28)] transition-all active:scale-[0.99]'}
                 >
                   <ProductIcon icon={product.emoji} className="w-7 h-7 text-xl shrink-0" />
 
@@ -735,13 +778,13 @@ export default function CustomerView({
                   {insideCartCount > 0 ? (
                     <div
                       id={'cart-minimal-controls-' + product.id}
-                      className="flex items-center gap-1 bg-white border border-zinc-200 rounded-full px-1 py-1 shrink-0"
+                      className="flex items-center gap-1 bg-white border-2 border-orange-400 rounded-full px-2 py-1 shrink-0 shadow-[0_14px_32px_rgba(234,88,12,0.35)] ring-4 ring-white scale-105"
                     >
                       <button
                         type="button"
                         id={'decrease-minimal-btn-' + product.id}
                         onClick={() => handleRemoveFromCart(product.id)}
-                        className="w-8 h-8 rounded-full text-zinc-650 hover:text-rose-600 hover:bg-zinc-50 flex items-center justify-center cursor-pointer"
+                        className="w-8 h-8 rounded-full text-zinc-700 hover:text-rose-600 hover:bg-rose-50 flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all"
                         title="Diminuir quantidade"
                       >
                         <Minus className="w-3.5 h-3.5" />
@@ -754,7 +797,7 @@ export default function CustomerView({
                         id={'increase-minimal-btn-' + product.id}
                         onClick={() => handleAddToCart(product.id)}
                         disabled={insideCartCount >= (product.stockAvailable ?? 0)}
-                        className="w-8 h-8 rounded-full bg-zinc-900 text-white disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center cursor-pointer"
+                        className="w-8 h-8 rounded-full bg-zinc-950 text-white disabled:bg-zinc-200 disabled:text-zinc-400 flex items-center justify-center cursor-pointer shadow-md shadow-zinc-900/20 hover:scale-110 active:scale-95 transition-all"
                         title="Aumentar quantidade"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -765,7 +808,7 @@ export default function CustomerView({
                       id={'add-minimal-btn-' + product.id}
                       onClick={() => handleAddToCart(product.id)}
                       disabled={insideCartCount >= (product.stockAvailable ?? 0)}
-                      className="w-9 h-9 rounded-full bg-zinc-900 text-white text-lg font-black flex items-center justify-center disabled:bg-zinc-200 disabled:text-zinc-400 cursor-pointer"
+                      className="w-11 h-11 rounded-full bg-gradient-to-br from-zinc-950 via-black to-zinc-800 hover:from-orange-700 hover:via-orange-600 hover:to-amber-500 text-white text-xl font-black flex items-center justify-center disabled:bg-zinc-200 disabled:text-zinc-400 cursor-pointer shadow-[0_14px_32px_rgba(0,0,0,0.38)] ring-4 ring-white hover:scale-110 active:scale-95 transition-all"
                       title="Adicionar"
                     >
                       +
@@ -786,11 +829,11 @@ export default function CustomerView({
                   id={'product-list-row-' + product.id}
                   className={
                     insideCartCount > 0
-                      ? 'rounded-2xl border p-3 flex items-center gap-3 shadow-xs bg-sky-50 border-sky-300 ring-2 ring-sky-100'
-                      : 'rounded-2xl border p-3 flex items-center gap-3 shadow-xs bg-white border-zinc-150'
+                      ? 'relative overflow-hidden rounded-[30px] border-2 p-4 flex items-center gap-4 bg-gradient-to-r from-red-500 via-orange-400 to-yellow-200 border-red-600 ring-4 ring-orange-300/80 shadow-[0_22px_55px_rgba(234,88,12,0.58)] scale-[1.015] active:scale-[0.99] transition-all'
+                      : 'rounded-[30px] border p-4 flex items-center gap-4 bg-white border-orange-100 shadow-[0_14px_35px_rgba(251,146,60,0.18)] hover:border-orange-300 hover:shadow-[0_18px_45px_rgba(251,146,60,0.32)] active:scale-[0.99] transition-all'
                   }
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center shrink-0 overflow-hidden">
+                  <div className="w-24 h-24 rounded-[28px] bg-gradient-to-br from-yellow-100 via-orange-50 to-white border border-orange-300 flex items-center justify-center shrink-0 overflow-hidden shadow-inner ring-1 ring-orange-100">
                     {product.imageUrl ? (
                       <img
                         src={product.imageUrl}
@@ -802,28 +845,28 @@ export default function CustomerView({
                         }}
                       />
                     ) : (
-                      <ProductIcon icon={product.emoji} className="w-9 h-9 text-2xl" />
+                      <ProductIcon icon={product.emoji} className="w-12 h-12 text-4xl" />
                     )}
                   </div>
 
                   <div className="min-w-0 flex-1">
-                    <span className="text-[9px] uppercase font-black text-amber-600 tracking-wider truncate block">
+                    <span className="text-[10px] uppercase font-black text-orange-600 tracking-wider truncate block mb-1">
                       {product.category}
                     </span>
-                    <h4 className="font-display font-black text-zinc-900 text-sm truncate">{product.name}</h4>
-                    <p className="text-zinc-500 text-xs truncate">{product.description || 'Produto disponível.'}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="font-mono font-black text-zinc-900 text-xs">
+                    <h4 className="font-display font-black text-zinc-950 text-base leading-tight line-clamp-2">{product.name}</h4>
+                    <p className="text-zinc-500 text-xs line-clamp-2 mt-1">{product.description || 'Produto disponível.'}</p>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className="font-mono font-black text-zinc-950 text-base">
                         R$ {product.price.toFixed(2)}
                       </span>
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-black uppercase">
+                      <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[9px] font-black uppercase">
                         {product.stockAvailable ?? 0} disp.
                       </span>
                     </div>
                   </div>
 
                   {insideCartCount > 0 ? (
-                    <div className="flex items-center gap-1 bg-white border border-zinc-200 rounded-full px-2 py-1">
+                    <div className="flex items-center gap-1 bg-white border-2 border-orange-400 rounded-full px-2 py-1 shrink-0 shadow-[0_14px_32px_rgba(234,88,12,0.35)] ring-4 ring-white scale-105">
                       <button
                         onClick={() => handleRemoveFromCart(product.id)}
                         className="w-7 h-7 rounded-full text-zinc-600 hover:bg-zinc-50 cursor-pointer"
@@ -843,7 +886,7 @@ export default function CustomerView({
                     <button
                       id={'add-list-btn-' + product.id}
                       onClick={() => handleAddToCart(product.id)}
-                      className="px-3 py-2 rounded-full bg-zinc-900 text-white text-xs font-black cursor-pointer"
+                      className="w-12 h-12 rounded-full bg-gradient-to-br from-zinc-950 via-black to-zinc-800 hover:from-orange-700 hover:via-orange-600 hover:to-amber-500 text-white text-lg font-black cursor-pointer shadow-[0_14px_32px_rgba(0,0,0,0.38)] ring-4 ring-white flex items-center justify-center hover:scale-110 active:scale-95 transition-all shrink-0"
                     >
                       +
                     </button>
@@ -863,11 +906,11 @@ export default function CustomerView({
                   id={'product-grid-card-' + product.id}
                   className={
                     insideCartCount > 0
-                      ? 'rounded-3xl border p-3 flex flex-col min-h-[190px] shadow-xs bg-sky-50 border-sky-300 ring-2 ring-sky-100'
-                      : 'rounded-3xl border p-3 flex flex-col min-h-[190px] shadow-xs bg-white border-zinc-150'
+                      ? 'rounded-[30px] border-2 p-3.5 flex flex-col min-h-[218px] bg-gradient-to-br from-red-500 via-orange-400 to-yellow-200 border-red-600 ring-4 ring-orange-300/80 shadow-[0_22px_55px_rgba(234,88,12,0.58)] scale-[1.015] active:scale-[0.99] transition-all'
+                      : 'rounded-[30px] border p-3.5 flex flex-col min-h-[218px] bg-white border-orange-100 shadow-[0_14px_35px_rgba(251,146,60,0.18)] hover:border-orange-300 hover:shadow-[0_18px_45px_rgba(251,146,60,0.32)] active:scale-[0.99] transition-all'
                   }
                 >
-                  <div className="w-full aspect-square max-h-24 rounded-2xl bg-zinc-50 border border-zinc-100 flex items-center justify-center overflow-hidden mb-2">
+                  <div className="w-full aspect-square max-h-28 rounded-3xl bg-zinc-50 border border-zinc-100 flex items-center justify-center overflow-hidden mb-2.5">
                     {product.imageUrl ? (
                       <img
                         src={product.imageUrl}
@@ -891,13 +934,13 @@ export default function CustomerView({
                   </h4>
 
                   <div className="mt-auto pt-2 flex items-center justify-between gap-2">
-                    <span className="font-mono font-black text-zinc-900 text-xs">
+                    <span className="font-mono font-black text-zinc-950 text-base">
                       R$ {product.price.toFixed(2)}
                     </span>
                     {insideCartCount > 0 ? (
                       <div
                         id={'cart-grid-controls-' + product.id}
-                        className="flex items-center gap-1 bg-white border border-zinc-200 rounded-full px-1 py-1 shrink-0"
+                        className="flex items-center gap-1 bg-white border-2 border-orange-400 rounded-full px-2 py-1 shrink-0 shadow-[0_14px_32px_rgba(234,88,12,0.35)] ring-4 ring-white scale-105"
                       >
                         <button
                           type="button"
@@ -948,8 +991,8 @@ export default function CustomerView({
                   id={'product-card-' + product.id}
                   className={
                     insideCartCount > 0
-                      ? 'relative rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 bg-sky-50 border-2 border-sky-400 shadow-lg shadow-sky-500/15 ring-2 ring-sky-100'
-                      : 'relative rounded-2xl overflow-hidden flex flex-col justify-between transition-all duration-200 bg-white border border-zinc-150 shadow-xs hover:shadow-sm'
+                      ? 'relative rounded-[30px] overflow-hidden flex flex-col justify-between transition-all duration-200 bg-gradient-to-br from-red-500 via-orange-400 to-yellow-200 border-2 border-red-600 shadow-[0_22px_55px_rgba(234,88,12,0.58)] ring-4 ring-orange-300/80 scale-[1.015] active:scale-[0.99]'
+                      : 'relative rounded-[30px] overflow-hidden flex flex-col justify-between transition-all duration-200 bg-white border border-orange-100 shadow-[0_14px_35px_rgba(251,146,60,0.18)] hover:shadow-[0_18px_45px_rgba(251,146,60,0.32)] hover:border-orange-300 active:scale-[0.99]'
                   }
                 >
                   {insideCartCount > 0 && (
@@ -964,8 +1007,8 @@ export default function CustomerView({
                   <div className="p-4 flex gap-4">
                     <div className={
                       insideCartCount > 0
-                        ? 'relative w-20 h-20 rounded-xl shrink-0 overflow-hidden flex items-center justify-center text-3xl select-none transition-colors bg-sky-100 border border-sky-300'
-                        : 'relative w-20 h-20 rounded-xl shrink-0 overflow-hidden flex items-center justify-center text-3xl select-none transition-colors bg-zinc-50 border border-zinc-100'
+                        ? 'relative w-24 h-24 rounded-3xl shrink-0 overflow-hidden flex items-center justify-center text-3xl select-none transition-colors bg-sky-100 border border-sky-300'
+                        : 'relative w-24 h-24 rounded-3xl shrink-0 overflow-hidden flex items-center justify-center text-3xl select-none transition-colors bg-zinc-50 border border-zinc-100'
                     }>
                       {product.imageUrl ? (
                         <img
@@ -1033,7 +1076,7 @@ export default function CustomerView({
                       <button
                         id={'add-to-cart-btn-' + product.id}
                         onClick={() => handleAddToCart(product.id)}
-                        className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 hover:scale-105 active:scale-95 text-white font-semibold text-xs rounded-full cursor-pointer transition-all flex items-center gap-1 shrink-0"
+                        className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 hover:scale-105 active:scale-95 text-white font-black text-xs rounded-full cursor-pointer transition-all flex items-center gap-1.5 shrink-0 shadow-md shadow-zinc-300/60"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>Adicionar</span>
@@ -1188,12 +1231,132 @@ export default function CustomerView({
         )}
       </AnimatePresence>
 
+      {/* Customer Purchase History Modal */}
+      <AnimatePresence>
+        {isPurchaseHistoryOpen && (
+          <div id="purchase-history-modal" className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/45 backdrop-blur-sm px-0 sm:px-4">
+            <motion.div
+              initial={{ y: 36, opacity: 0, scale: 0.98 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 36, opacity: 0, scale: 0.98 }}
+              className="w-full sm:max-w-lg bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden shadow-2xl border border-zinc-100 max-h-[88vh] flex flex-col"
+            >
+              <div className="px-5 py-4 border-b border-zinc-100 flex items-center justify-between bg-gradient-to-r from-emerald-50 to-white">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                    <History className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-display font-black text-zinc-950 text-base truncate">
+                      Histórico de aquisições
+                    </h3>
+                    <p className="text-[11px] text-zinc-500 font-bold">
+                      Compras notificadas pelo cardápio
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsPurchaseHistoryOpen(false)}
+                  className="w-9 h-9 rounded-full bg-white border border-zinc-100 text-zinc-500 hover:text-zinc-900 hover:bg-zinc-50 flex items-center justify-center"
+                  aria-label="Fechar histórico"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-zinc-50/70">
+                {purchaseHistoryLoading ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-zinc-500">
+                    <Loader2 className="w-6 h-6 animate-spin mb-3" />
+                    <p className="text-xs font-bold">Carregando histórico...</p>
+                  </div>
+                ) : purchaseHistoryError ? (
+                  <div className="rounded-2xl border border-red-100 bg-red-50 p-4 text-sm font-bold text-red-700">
+                    {purchaseHistoryError}
+                  </div>
+                ) : purchaseHistory.length === 0 ? (
+                  <div className="py-12 text-center">
+                    <ShoppingCart className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
+                    <p className="text-sm font-black text-zinc-800">Nenhuma aquisição notificada ainda.</p>
+                    <p className="text-xs text-zinc-500 mt-1">Quando você notificar uma compra, ela aparecerá aqui.</p>
+                  </div>
+                ) : (
+                  purchaseHistory.map((sale) => (
+                    <div
+                      key={sale.id}
+                      className="rounded-3xl bg-white border border-zinc-100 p-4 shadow-sm space-y-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] uppercase tracking-wider font-black text-zinc-400">
+                            {new Date(sale.createdAt).toLocaleDateString('pt-BR')} às {new Date(sale.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                          <p className="text-lg font-mono font-black text-zinc-950">
+                            R$ {sale.totalAmount.toFixed(2)}
+                          </p>
+                        </div>
+
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase border ${
+                          sale.paymentMethod === 'pix'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+                            : 'bg-amber-50 text-amber-700 border-amber-100'
+                        }`}>
+                          {sale.paymentMethod === 'pix' ? 'PIX informado' : 'Pagar depois'}
+                        </span>
+                      </div>
+
+                      <div className="space-y-2">
+                        {sale.items.map((item) => (
+                          <div key={item.id} className="flex items-center justify-between gap-3 text-xs">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <ProductIcon icon={item.emoji} className="w-5 h-5 text-base shrink-0" />
+                              <span className="font-bold text-zinc-700 truncate">
+                                {item.quantity}x {item.name}
+                              </span>
+                            </div>
+                            <span className="font-mono font-black text-zinc-900 shrink-0">
+                              R$ {(item.price * item.quantity).toFixed(2)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {sale.paymentMethod === 'pix' && (
+                        <div className="pt-3 border-t border-zinc-100">
+                          {sale.paymentProofUrl ? (
+                            <a
+                              href={sale.paymentProofUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 text-xs font-black shadow-md shadow-emerald-700/20"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                              Ver comprovante PIX
+                            </a>
+                          ) : (
+                            <span className="inline-flex rounded-2xl bg-zinc-100 text-zinc-500 px-3 py-2 text-xs font-bold">
+                              PIX informado sem comprovante anexado
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Floating WhatsApp Admin Contact */}
       <button
         id="floating-admin-whatsapp-btn"
         type="button"
         onClick={handleOpenAdminWhatsapp}
-        className="fixed right-4 bottom-28 z-50 w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-700/25 border border-emerald-300 flex items-center justify-center transition-all active:scale-95"
+        className="fixed right-5 bottom-36 z-50 w-14 h-14 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-700/25 border border-emerald-300 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
         title="Chamar admin no WhatsApp"
         aria-label="Chamar admin no WhatsApp para pedidos, críticas ou sugestões"
       >
@@ -1201,12 +1364,19 @@ export default function CustomerView({
       </button>
 
       {/* Floating Bottom Adhesive Bar (PIX copy and WhatsApp help options) */}
-      <div id="sticky-checkout-deck" className="fixed bottom-0 inset-x-0 z-40 bg-orange-100/95 border-t border-orange-300 shadow-xl px-4 py-4 backdrop-blur-md">
+      <div
+        id="sticky-checkout-deck"
+        className={`fixed bottom-0 inset-x-0 z-40 px-4 py-3 backdrop-blur-md transition-all duration-300 border-t shadow-2xl ${
+          cartItemsCount > 0
+            ? 'bg-gradient-to-r from-orange-700 via-amber-500 to-yellow-300 border-orange-600 shadow-[0_-18px_50px_rgba(234,88,12,0.45)]'
+            : 'bg-amber-100/95 border-amber-300 shadow-zinc-300/30'
+        }`}
+      >
         <div className="max-w-2xl mx-auto flex flex-col sm:flex-row gap-3 items-center justify-between">
           
           {/* Quick PIX Copy Box */}
           {settings.pixKey ? (
-            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-4 p-2 bg-zinc-50 border border-zinc-150 rounded-2xl flex-1 max-w-sm">
+            <div className={`w-full sm:w-auto flex items-center justify-between sm:justify-start gap-4 p-2.5 rounded-2xl flex-1 max-w-sm transition-all duration-300 ${cartItemsCount > 0 ? 'bg-white/95 border border-white/80 shadow-lg shadow-orange-700/20' : 'bg-white/85 border border-amber-300 shadow-sm'}`}>
               <div className="min-w-0 px-2">
                 <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider block">
                   Pagamento PIX
@@ -1240,7 +1410,7 @@ export default function CustomerView({
               <button
                 id="view-cart-btn"
                 onClick={() => setIsCartOpen(true)}
-                className="px-3 py-3 bg-violet-600 hover:bg-violet-700 border border-violet-700/40 text-white font-black rounded-2xl cursor-pointer flex items-center justify-center gap-2 transition-colors min-w-[116px] shadow-md shadow-violet-600/20"
+                className="px-3 py-3 bg-zinc-950 hover:bg-zinc-900 border border-white/30 text-white font-black rounded-2xl cursor-pointer flex items-center justify-center gap-2 transition-all min-w-[116px] shadow-xl shadow-zinc-900/30 active:scale-95"
                 title="Visualizar Comanda"
               >
                 <ShoppingCart className="w-4 h-4 shrink-0" />
@@ -1269,8 +1439,8 @@ export default function CustomerView({
               }}
               className={`flex-1 sm:flex-none px-6 py-3.5 font-bold text-sm rounded-2xl cursor-pointer flex items-center justify-center gap-2 shadow-md transition-all ${
                 cartItemsCount > 0
-                  ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white hover:scale-[1.01] active:scale-[0.99] shadow-emerald-500/15'
-                  : 'bg-zinc-200 text-zinc-500 shadow-zinc-200/30'
+                  ? 'bg-gradient-to-r from-emerald-700 via-green-600 to-lime-500 hover:from-emerald-800 hover:via-green-700 hover:to-lime-600 text-white hover:scale-[1.03] active:scale-[0.97] shadow-[0_16px_38px_rgba(4,120,87,0.48)] ring-4 ring-white/50 border border-white/40'
+                  : 'bg-zinc-200 text-zinc-500 shadow-zinc-200/30 border border-zinc-300'
               }`}
               aria-disabled={cartItemsCount <= 0}
             >
@@ -1301,7 +1471,7 @@ export default function CustomerView({
               className="w-full max-w-lg bg-white rounded-t-3xl overflow-hidden shadow-2xl border-t border-zinc-100 flex flex-col max-h-[85vh]"
             >
               {/* Cart Modal Head */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-150">
+              <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100">
                 <div className="flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5 text-amber-500" />
                   <h3 className="font-display font-bold text-lg text-zinc-900">
@@ -1366,7 +1536,7 @@ export default function CustomerView({
               </div>
 
               {/* Bottom total controls */}
-              <div className="p-6 bg-zinc-50 border-t border-zinc-150 space-y-4">
+              <div className="p-6 bg-zinc-50 border-t border-zinc-100 space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-zinc-500 font-medium">Subtotal Geral</span>
                   <span className="font-mono font-bold text-zinc-900 text-lg">
@@ -1489,7 +1659,7 @@ export default function CustomerView({
                   onClick={() => setSelectedPaymentMethod('later')}
                   className={`w-full p-4 rounded-2xl border text-left cursor-pointer transition-all ${
                     selectedPaymentMethod === 'later'
-                      ? 'border-amber-500 bg-amber-500/5 shadow-xs'
+                      ? 'border-amber-500 bg-amber-500/5 shadow-sm'
                       : 'border-zinc-200 hover:border-zinc-350 bg-white'
                   }`}
                 >
@@ -1512,7 +1682,7 @@ export default function CustomerView({
                   onClick={() => setSelectedPaymentMethod('pix')}
                   className={`w-full p-4 rounded-2xl border text-left cursor-pointer transition-all ${
                     selectedPaymentMethod === 'pix'
-                      ? 'border-emerald-500 bg-emerald-500/5 shadow-xs'
+                      ? 'border-emerald-500 bg-emerald-500/5 shadow-sm'
                       : 'border-zinc-200 hover:border-zinc-350 bg-white'
                   }`}
                 >
@@ -1531,7 +1701,7 @@ export default function CustomerView({
               </div>
 
               {selectedPaymentMethod === 'pix' && (
-                <div className="p-3 bg-zinc-50 rounded-xl mb-5 border border-zinc-150 text-[11px] text-zinc-500 flex flex-col gap-1.5">
+                <div className="p-3 bg-zinc-50 rounded-xl mb-5 border border-zinc-100 text-[11px] text-zinc-500 flex flex-col gap-1.5">
                   <div className="font-bold text-zinc-700">Chave PIX do Estabelecimento:</div>
                   <div className="flex items-center justify-between bg-white border border-zinc-200 p-2 rounded-lg">
                     <span className="font-mono text-zinc-850 text-[10px] break-all select-all pr-2">{settings.pixKey}</span>

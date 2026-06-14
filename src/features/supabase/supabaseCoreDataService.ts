@@ -465,6 +465,47 @@ export async function listSupabaseSales(): Promise<SupabaseSale[]> {
   );
 }
 
+export async function listSupabaseSalesByCustomerProfileId(customerProfileId: string): Promise<SupabaseSale[]> {
+  const client = requireSupabase();
+
+  if (!customerProfileId) {
+    return [];
+  }
+
+  const { data: salesRows, error: salesError } = await client
+    .from('sales')
+    .select('*')
+    .eq('customer_profile_id', customerProfileId)
+    .order('created_at', { ascending: false })
+    .limit(50);
+
+  if (salesError) {
+    throw salesError;
+  }
+
+  const saleIds = (salesRows || []).map((sale) => sale.id);
+
+  if (saleIds.length === 0) {
+    return [];
+  }
+
+  const { data: itemRows, error: itemsError } = await client
+    .from('sale_items')
+    .select('*')
+    .in('sale_id', saleIds);
+
+  if (itemsError) {
+    throw itemsError;
+  }
+
+  return (salesRows as SaleRow[]).map((sale) =>
+    mapSale(
+      sale,
+      (itemRows as SaleItemRow[]).filter((item) => item.sale_id === sale.id),
+    ),
+  );
+}
+
 export async function deleteSupabaseSale(id: string): Promise<void> {
   const client = requireSupabase();
 
