@@ -56,8 +56,8 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaved, setSettingsSaved] = useState(false);
 
-  // Active Tab: 'products' | 'settings' | 'qrcode' | 'sales' | 'batches'
-  const [activeTab, setActiveTab] = useState<'products' | 'settings' | 'qrcode' | 'sales' | 'batches'>('products');
+  // Active Tab: 'products' | 'settings' | 'guidance' | 'sales' | 'batches'
+  const [activeTab, setActiveTab] = useState<'products' | 'settings' | 'guidance' | 'sales' | 'batches'>('products');
   const [adminNotice, setAdminNotice] = useState<{ type: 'success' | 'error' | 'info'; message: string } | null>(null);
 
   // Sales list track state
@@ -78,14 +78,12 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
   const [formAvailable, setFormAvailable] = useState(true);
   const [productSubmitLoading, setProductSubmitLoading] = useState(false);
 
-  // QR Placard State
-  const [qrTableNumber, setQrTableNumber] = useState('01');
+  // Physical store guidance state
+  const [guidanceReference, setGuidanceReference] = useState('Loja CIICC');
   const [copiedLink, setCopiedLink] = useState(false);
 
   const currentAppUrl = window.location.origin + window.location.pathname;
-  const qrBaseUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&color=d97706&data=`;
-  const customerLink = `${currentAppUrl}?mesa=${qrTableNumber}`;
-  const qrCodeUrl = `${qrBaseUrl}${encodeURIComponent(customerLink)}`;
+  const customerLink = currentAppUrl;
 
   const showAdminNotice = useCallback((type: 'success' | 'error' | 'info', message: string) => {
     setAdminNotice({ type, message });
@@ -116,7 +114,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
       const data = await listSupabaseSales();
       setSales(data);
     } catch (err) {
-      console.error('Erro ao carregar vendas/comandas no Supabase:', err);
+      console.error('Erro ao carregar aquisições no Supabase:', err);
     } finally {
       setSalesLoading(false);
     }
@@ -275,7 +273,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
             Painel de Alimentação
           </h1>
           <p className="text-zinc-500 text-xs mt-0.5">
-            Crie produtos, alterne a oferta e configure os dados de pagamento PIX.
+            Gerencie produtos, disponibilidade e dados de pagamento da loja física CIICC.
           </p>
         </div>
 
@@ -339,18 +337,18 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
               : 'border-transparent text-zinc-500 hover:text-zinc-800'
           }`}
         >
-          Configurações PIX & WhatsApp
+          PIX & WhatsApp Administrativo
         </button>
         <button
-          id="tab-qrcode-btn"
-          onClick={() => setActiveTab('qrcode')}
+          id="tab-store-guidance-btn"
+          onClick={() => setActiveTab('guidance')}
           className={`flex-1 py-3 text-center text-xs sm:text-sm font-medium border-b-2 transition-all cursor-pointer ${
-            activeTab === 'qrcode'
+            activeTab === 'guidance'
               ? 'border-amber-500 text-amber-600 font-semibold'
               : 'border-transparent text-zinc-500 hover:text-zinc-800'
           }`}
         >
-          Placard / QR Code
+          Orientações da Loja
         </button>
         <button
           id="tab-sales-btn"
@@ -499,7 +497,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
         {activeTab === 'settings' && (
           <form onSubmit={handleSaveSettings} className="bg-white border border-zinc-150 rounded-3xl p-6 space-y-5">
             <h3 className="font-display font-semibold text-lg text-zinc-900 pb-2 border-b border-zinc-100">
-              Chave PIX e Contatos de Atendimento
+              Chave PIX e Contato Administrativo
             </h3>
 
             {settingsSaved && (
@@ -527,7 +525,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
             {/* PIX Key Input */}
             <div>
               <label className="block text-xs font-semibold text-zinc-650 mb-1.5 uppercase tracking-wider">
-                Chave PIX do Estabelecimento
+                Chave PIX da Loja CIICC
               </label>
               <input
                 id="setting-pixkey-input"
@@ -539,7 +537,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
                 className="w-full px-4 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-none transition-all font-mono"
               />
               <p className="text-zinc-500 text-[10px] mt-1 pr-4">
-                Esta chave será exibida para o cliente copiar na hora de fazer o acerto financeiro do pedido.
+                Esta chave será exibida ao cliente para pagamento PIX da aquisição física.
               </p>
             </div>
 
@@ -590,28 +588,28 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
           </form>
         )}
 
-        {/* TAB 3: QR Placard Generator */}
-        {activeTab === 'qrcode' && (
+        {/* TAB 3: Store guidance */}
+        {activeTab === 'guidance' && (
           <div className="bg-white border border-zinc-150 rounded-3xl p-6 grid grid-cols-1 md:grid-cols-5 gap-6">
             {/* Controls */}
             <div className="md:col-span-2 space-y-4">
               <h3 className="font-display font-semibold text-lg text-zinc-900">
-                Criar Displays de Mesa
+                Orientações para Atendimento Físico
               </h3>
               <p className="text-zinc-500 text-xs leading-relaxed">
-                Gere e imprima QR Codes exclusivos para colocar nas mesas do seu estabelecimento. Quando o cliente escaneia o código, o cardápio abre automaticamente identificado com o número correspondente da mesa!
+                Use este painel como referência administrativa da loja física CIICC. O fluxo validado do MVP é orientado à aquisição física: o cliente acessa o cardápio, seleciona produtos e informa a aquisição para conferência.
               </p>
 
               <div>
                 <label className="block text-xs font-semibold text-zinc-650 mb-1.5 uppercase tracking-wider">
-                  Número da Mesa
+                  Referência interna opcional
                 </label>
                 <input
-                  id="qr-table-number-input"
+                  id="guidance-reference-input"
                   type="text"
-                  value={qrTableNumber}
-                  onChange={(e) => setQrTableNumber(e.target.value)}
-                  placeholder="Ex: 01, 02, Especial..."
+                  value={guidanceReference}
+                  onChange={(e) => setGuidanceReference(e.target.value)}
+                  placeholder="Ex: Loja CIICC, Cantina, Administrativo..."
                   className="w-full px-4 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-none transition-all font-mono"
                 />
               </div>
@@ -635,25 +633,24 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
                   {storeName || 'ESTABELECIMENTO'}
                 </span>
                 <span className="font-display font-bold text-2xl text-zinc-900 block mb-4">
-                  MESA {qrTableNumber || '01'}
+                  REFERÊNCIA {guidanceReference || 'Loja CIICC'}
                 </span>
 
-                {/* QR Display */}
+                {/* Store guidance display */}
                 <div className="w-44 h-44 bg-zinc-50 border border-zinc-100/50 rounded-xl flex items-center justify-center overflow-hidden mb-4 p-2 select-none">
-                  <img
-                    src={qrCodeUrl}
-                    alt="QR Code"
-                    className="w-full h-full object-contain"
-                  />
+                  <div className="text-center px-3">
+                    <p className="text-[10px] uppercase tracking-wider font-black text-amber-600 mb-2">Link do cardápio</p>
+                    <p className="text-[11px] font-mono text-zinc-700 break-all">{customerLink}</p>
+                  </div>
                 </div>
 
                 <span className="text-[10px] text-zinc-500 font-mono leading-tight block">
-                  Aponte seu celular e peça pelo WhatsApp!
+                  Acesse o cardápio e confirme a aquisição pelo WhatsApp.
                 </span>
               </div>
 
               <p className="text-zinc-500 text-[10px] mt-3 pr-2 text-center">
-                Visualização do display de mesa gerado. Exiba esta imagem no caixa ou imprima para colocar nos displays.
+                Referência visual do link do cardápio para apoio administrativo da loja física CIICC.
               </p>
             </div>
           </div>
@@ -708,7 +705,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
                 <div>
                   <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Aquisições Realizadas</span>
                   <h3 className="font-mono font-black text-2xl text-zinc-800 mt-1 leading-none">
-                    {sales.length} comandas
+                    {sales.length} aquisições
                   </h3>
                 </div>
                 <div className="p-3 bg-zinc-100 text-zinc-500 rounded-2xl">
@@ -723,10 +720,10 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
                 <div>
                   <h3 className="font-display font-semibold text-lg text-zinc-900 flex items-center gap-2">
                     <Sliders className="w-5 h-5 text-amber-500" />
-                    Controlador de Vendas & Comandas
+                    Controle de Aquisições da Loja
                   </h3>
                   <p className="text-zinc-500 text-xs mt-0.5">
-                    Painel centralizador para controlar consumo de clientes, métodos de pagamento e realizar baixa de contas.
+                    Painel centralizador para acompanhar aquisições físicas, formas de pagamento e conferência administrativa.
                   </p>
                 </div>
 
@@ -752,7 +749,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
                         : 'bg-white border-zinc-200 text-zinc-650 hover:bg-zinc-50'
                     }`}
                   >
-                    Pago via PIX
+                    PIX informado
                   </button>
                   <button
                     type="button"
@@ -772,7 +769,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
               <div className="mb-6">
                 <input
                   type="text"
-                  placeholder="Pesquisar por cliente, setor de trabalho ou prato consumido..."
+                  placeholder="Pesquisar por cliente, setor de trabalho ou produto adquirido..."
                   value={salesSearchQuery}
                   onChange={(e) => setSalesSearchQuery(e.target.value)}
                   className="w-full px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-xl text-xs focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 transition-all outline-hidden text-zinc-805"
@@ -783,14 +780,14 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
               {salesLoading ? (
                 <div className="py-12 text-center flex flex-col items-center gap-2">
                   <div className="w-8 h-8 rounded-full border-2 border-amber-500 border-t-transparent animate-spin animate-faster" />
-                  <span className="text-xs text-zinc-500 font-medium animate-pulse">Sincronizando comanda em tempo real...</span>
+                  <span className="text-xs text-zinc-500 font-medium animate-pulse">Sincronizando aquisições em tempo real...</span>
                 </div>
               ) : sales.length === 0 ? (
                 <div className="p-12 border-2 border-dashed border-zinc-200 text-center rounded-3xl bg-zinc-50/50">
                   <PackageCheck className="w-8 h-8 text-zinc-300 mx-auto mb-2" />
                   <h4 className="font-semibold text-zinc-800 text-sm">Nenhuma aquisição efetuada</h4>
                   <p className="text-zinc-500 text-xs mt-1 max-w-xs mx-auto leading-relaxed">
-                    Quando os clientes realizarem seus pedidos no cardápio digital, os relatórios de consumo completo aparecerão instantaneamente aqui.
+                    Quando os clientes registrarem aquisições no cardápio digital, o histórico administrativo aparecerá aqui.
                   </p>
                 </div>
               ) : (
@@ -853,31 +850,31 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
                               {sale.paymentMethod === 'pix' ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-500/10 text-emerald-600 border border-emerald-500/15 rounded-full text-[10px] font-bold">
                                   <Check className="w-3 h-3" />
-                                  PAGO PIX
+                                  {sale.paymentMethod === 'pix' ? 'PIX informado' : 'Acerto posterior'}
                                 </span>
                               ) : (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-amber-500/10 text-amber-700 border border-amber-500/15 rounded-full text-[10px] font-bold">
-                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
-                                  PAGAR POSTERIOR
+                                  <Clock className="w-3 h-3" />
+                                  {sale.paymentMethod === 'pix' ? 'PIX informado' : 'Acerto posterior'}
                                 </span>
                               )}
 
                               <button
                                 type="button"
                                 onClick={async () => {
-                                  if (window.confirm(`Deseja dar baixa ou excluir a comanda de R$ ${sale.totalAmount.toFixed(2)} de ${sale.customerName}?`)) {
+                                  if (window.confirm(`Deseja dar baixa ou excluir a aquisição de R$ ${sale.totalAmount.toFixed(2)} de ${sale.customerName}?`)) {
                                     try {
                                       await deleteSupabaseSale(sale.id);
                                       await loadSales();
-                                      showAdminNotice('success', 'Comanda baixada/removida da lista.');
+                                      showAdminNotice('success', 'Aquisição baixada/removida da lista.');
                                     } catch (err) {
-                                      console.error('Erro ao excluir venda no Supabase:', err);
+                                      console.error('Erro ao excluir aquisição no Supabase:', err);
                                       showAdminNotice('error', 'Houve um erro ao excluir o registro. Verifique sua sessão administrativa.');
                                     }
                                   }
                                 }}
                                 className="p-1 px-2 rounded-lg border border-red-100 hover:border-red-250 bg-white hover:bg-red-50 text-red-550 transition-colors text-[10px] font-semibold flex items-center gap-1"
-                                title="Liquidar comanda da lista"
+                                title="Baixar aquisição da lista"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                                 <span className="hidden sm:inline">Dar Baixa</span>
@@ -903,7 +900,7 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
                               ))}
                             </div>
                             <div className="pt-2 border-t border-zinc-150 flex items-center justify-between font-bold text-sm text-zinc-900">
-                              <span>Total da Comanda</span>
+                              <span>Total da aquisição</span>
                               <span className="font-mono text-amber-600">
                                 R$ {sale.totalAmount.toFixed(2)}
                               </span>
