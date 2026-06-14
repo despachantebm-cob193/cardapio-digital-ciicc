@@ -19,7 +19,7 @@ import CustomerView from './components/CustomerView';
 import AdminLogin from './components/AdminLogin';
 import AdminPanel from './components/AdminPanel';
 import CustomerRegistrationGate from './components/CustomerRegistrationGate';
-import { LogIn, ShoppingBag, Landmark, Settings, Flame } from 'lucide-react';
+import { LogIn, ShoppingBag, Landmark, Settings, Flame, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
@@ -179,6 +179,15 @@ export default function App() {
                 <Settings className="w-3.5 h-3.5" />
                 <span>Painel Geral</span>
               </button>
+              <button
+                id="admin-top-signout-btn"
+                onClick={handleAdminLogout}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all flex items-center gap-1.5 text-rose-600 hover:bg-rose-50"
+                title="Sair do painel administrativo"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sair</span>
+              </button>
             </div>
           </div>
         </header>
@@ -254,7 +263,6 @@ export default function App() {
               <AdminPanel
                 products={products}
                 settings={settings}
-                onExitAdmin={handleAdminLogout}
                 onCoreDataChanged={refreshCoreData}
               />
             </motion.div>

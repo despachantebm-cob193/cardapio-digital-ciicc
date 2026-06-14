@@ -6,7 +6,6 @@ import {
   Save,
   Smartphone,
   Check,
-  LogOut,
   Sliders,
   ToggleLeft,
   ToggleRight,
@@ -32,7 +31,6 @@ import {
 interface AdminPanelProps {
   products: Product[];
   settings: StoreSetting;
-  onExitAdmin: () => void;
   onCoreDataChanged?: () => Promise<void> | void;
 }
 
@@ -47,7 +45,7 @@ const CATEGORIES = [
 
 const POPULAR_EMOJIS = ['🍔', '🍕', '🍟', '🥤', '🍰', '🧅', '🍨', '🍗', '🌭', '🥗', '☕', '🍺'];
 
-export default function AdminPanel({ products, settings, onExitAdmin, onCoreDataChanged }: AdminPanelProps) {
+export default function AdminPanel({ products, settings, onCoreDataChanged }: AdminPanelProps) {
   // Settings Form State
   const [storeName, setStoreName] = useState(settings.storeName);
   const [pixKey, setPixKey] = useState(settings.pixKey);
@@ -253,9 +251,6 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleLogout = () => {
-    onExitAdmin();
-  };
 
   return (
     <div id="admin-panel-container" className="max-w-4xl mx-auto px-4 py-6">
@@ -278,23 +273,6 @@ export default function AdminPanel({ products, settings, onExitAdmin, onCoreData
           </p>
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto">
-          <button
-            id="exit-admin-btn"
-            onClick={onExitAdmin}
-            className="flex-1 sm:flex-none px-4 py-2.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-medium text-xs rounded-xl cursor-pointer transition-colors"
-          >
-            Ver Cardápio
-          </button>
-          <button
-            id="admin-signout-btn"
-            onClick={handleLogout}
-            className="px-3 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl cursor-pointer transition-colors"
-            title="Sair Administrativo"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
       {adminNotice && (
