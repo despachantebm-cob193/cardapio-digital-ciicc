@@ -1,30 +1,37 @@
--- Fase 18 — Controle real de estoque por produto/lote
--- Objetivo:
--- - adicionar estoque inicial e estoque disponível aos produtos;
--- - permitir que o Controle de Lotes alimente o cardápio;
--- - baixar estoque automaticamente ao registrar aquisição;
--- - remover oferta do cardápio quando o estoque zerar.
-
 alter table public.products
   add column if not exists stock_initial integer not null default 0,
-  add column if not exists stock_available integer not null default 0;
+  add column if not exists stock_available integer not null default 0,
+  add column if not exists cost_price numeric(10, 2) not null default 0,
+  add column if not exists lifecycle_type text not null default 'industrial',
+  add column if not exists cycle_started_at timestamptz not null default now(),
+  add column if not exists cycle_closed_at timestamptz,
+  add column if not exists cycle_unsold_quantity integer not null default 0;
 
-do $$
-begin
-  if not exists (
-    select 1 from pg_constraint where conname = 'products_stock_initial_non_negative'
-  ) then
-    alter table public.products
-      add constraint products_stock_initial_non_negative check (stock_initial >= 0);
-  end if;
+update public.products
+set
+  stock_initial = greatest(coalesce(stock_initial, 0), 0),
+  stock_available = greatest(coalesce(stock_available, 0), 0),
+  cost_price = greatest(coalesce(cost_price, 0), 0),
+  lifecycle_type = case
+    when lifecycle_type in ('same_day', 'industrial') then lifecycle_type
+    else 'industrial'
+  end,
+  cycle_started_at = coalesce(cycle_started_at, now()),
+  cycle_unsold_quantity = greatest(coalesce(cycle_unsold_quantity, 0), 0);
 
-  if not exists (
-    select 1 from pg_constraint where conname = 'products_stock_available_non_negative'
-  ) then
-    alter table public.products
-      add constraint products_stock_available_non_negative check (stock_available >= 0);
-  end if;
-end $$;
+alter table public.products
+  drop constraint if exists products_stock_initial_non_negative,
+  drop constraint if exists products_stock_available_non_negative,
+  drop constraint if exists products_cost_price_non_negative,
+  drop constraint if exists products_cycle_unsold_non_negative,
+  drop constraint if exists products_lifecycle_type_valid;
+
+alter table public.products
+  add constraint products_stock_initial_non_negative check (stock_initial >= 0),
+  add constraint products_stock_available_non_negative check (stock_available >= 0),
+  add constraint products_cost_price_non_negative check (cost_price >= 0),
+  add constraint products_cycle_unsold_non_negative check (cycle_unsold_quantity >= 0),
+  add constraint products_lifecycle_type_valid check (lifecycle_type in ('same_day', 'industrial'));
 
 create or replace function public.create_sale_with_stock(
   p_customer_profile_id uuid,
@@ -42,14 +49,14 @@ returns uuid
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $create_sale_with_stock$
 declare
   v_sale_id uuid;
   v_item record;
   v_updated integer;
 begin
   if p_payment_method not in ('later', 'pix') then
-    raise exception 'Forma de pagamento inválida.';
+    raise exception 'Invalid payment method.';
   end if;
 
   if not (
@@ -62,7 +69,7 @@ begin
         and status = 'active'::public.profile_status
     )
   ) then
-    raise exception 'Cliente sem permissão para registrar aquisição.';
+    raise exception 'Customer is not allowed to register sale.';
   end if;
 
   insert into public.sales (
@@ -100,7 +107,7 @@ begin
     )
   loop
     if v_item.quantity is null or v_item.quantity <= 0 then
-      raise exception 'Quantidade inválida para o produto %.', coalesce(v_item.name, 'sem nome');
+      raise exception 'Invalid quantity for product %.', coalesce(v_item.name, 'unnamed');
     end if;
 
     if v_item.product_id is not null then
@@ -114,12 +121,13 @@ begin
         updated_at = now()
       where id = v_item.product_id
         and available = true
+        and cycle_closed_at is null
         and stock_available >= v_item.quantity;
 
       get diagnostics v_updated = row_count;
 
       if v_updated = 0 then
-        raise exception 'Estoque insuficiente ou produto indisponível: %.', coalesce(v_item.name, v_item.product_id::text);
+        raise exception 'Insufficient stock or unavailable product: %.', coalesce(v_item.name, v_item.product_id::text);
       end if;
     end if;
 
@@ -137,13 +145,13 @@ begin
       coalesce(v_item.name, 'Produto'),
       v_item.quantity,
       coalesce(v_item.price, 0),
-      coalesce(v_item.emoji, '🍽️')
+      coalesce(v_item.emoji, 'item')
     );
   end loop;
 
   return v_sale_id;
 end;
-$$;
+$create_sale_with_stock$;
 
 grant execute on function public.create_sale_with_stock(
   uuid,
@@ -159,7 +167,22 @@ grant execute on function public.create_sale_with_stock(
 ) to authenticated;
 
 comment on column public.products.stock_initial is
-  'Quantidade inicial informada no Controle de Lotes.';
+  'Initial quantity informed in stock control.';
 
 comment on column public.products.stock_available is
-  'Quantidade disponível atual para oferta no cardápio.';
+  'Current available quantity for customer menu.';
+
+comment on column public.products.cost_price is
+  'Unit cost used for margin calculation.';
+
+comment on column public.products.lifecycle_type is
+  'Product lifecycle type: same_day or industrial.';
+
+comment on column public.products.cycle_started_at is
+  'Timestamp when the product sale cycle was started.';
+
+comment on column public.products.cycle_closed_at is
+  'Timestamp when the sale cycle was closed.';
+
+comment on column public.products.cycle_unsold_quantity is
+  'Unsold quantity informed when closing the cycle.';

@@ -67,6 +67,11 @@ type ProductRow = {
   available: boolean | null;
   stock_initial: number | null;
   stock_available: number | null;
+  cost_price: number | null;
+  lifecycle_type: string | null;
+  cycle_started_at: string | null;
+  cycle_closed_at: string | null;
+  cycle_unsold_quantity: number | null;
   sort_order: number | null;
 };
 
@@ -136,6 +141,11 @@ function toProductPayload(product: Omit<Product, 'id'> | Partial<Product>) {
   if (product.available !== undefined) payload.available = product.available;
   if (product.stockInitial !== undefined) payload.stock_initial = product.stockInitial;
   if (product.stockAvailable !== undefined) payload.stock_available = product.stockAvailable;
+  if (product.costPrice !== undefined) payload.cost_price = product.costPrice;
+  if (product.lifecycleType !== undefined) payload.lifecycle_type = product.lifecycleType;
+  if (product.cycleStartedAt !== undefined) payload.cycle_started_at = product.cycleStartedAt;
+  if (product.cycleClosedAt !== undefined) payload.cycle_closed_at = product.cycleClosedAt;
+  if (product.cycleUnsoldQuantity !== undefined) payload.cycle_unsold_quantity = product.cycleUnsoldQuantity;
 
   return payload;
 }
@@ -152,6 +162,11 @@ function mapProduct(row: ProductRow): Product {
     available: row.available ?? true,
     stockInitial: row.stock_initial ?? 0,
     stockAvailable: row.stock_available ?? 0,
+    costPrice: row.cost_price ?? 0,
+    lifecycleType: row.lifecycle_type === 'same_day' ? 'same_day' : 'industrial',
+    cycleStartedAt: row.cycle_started_at,
+    cycleClosedAt: row.cycle_closed_at,
+    cycleUnsoldQuantity: row.cycle_unsold_quantity ?? 0,
   };
 }
 
@@ -209,7 +224,7 @@ export async function listSupabaseProducts(): Promise<Product[]> {
 
   const { data, error } = await client
     .from('products')
-    .select('id, name, description, price, category, emoji, image_url, available, stock_initial, stock_available, sort_order')
+    .select('id, name, description, price, category, emoji, image_url, available, stock_initial, stock_available, cost_price, lifecycle_type, cycle_started_at, cycle_closed_at, cycle_unsold_quantity, sort_order')
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
 
