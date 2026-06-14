@@ -268,35 +268,24 @@ export default function CustomerView({
         status: 'active',
       };
 
-      let saleId = '';
-      let salePersistedInCloud = false;
-
-      try {
-        saleId = await createSupabaseSale({
-          customerProfile: supabaseCustomerProfile,
-          items: saleItems.map((item) => ({
-            productId: item.productId || null,
-            name: item.name,
-            quantity: item.quantity,
-            price: item.price,
-            emoji: item.emoji,
-          })),
-          totalAmount: cartTotal,
-          paymentMethod: selectedPaymentMethod,
-        });
-        salePersistedInCloud = true;
-      } catch (saleError) {
-        const fallbackCode = Date.now().toString(36).toUpperCase();
-        saleId = `LOCAL-${fallbackCode}`;
-        console.error('Aquisição não registrada no Supabase; seguindo com notificação manual:', saleError);
-      }
-
+      const saleId = await createSupabaseSale({
+        customerProfile: supabaseCustomerProfile,
+        items: saleItems.map((item) => ({
+          productId: item.productId || null,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          emoji: item.emoji,
+        })),
+        totalAmount: cartTotal,
+        paymentMethod: selectedPaymentMethod,
+      });
 
       setCheckedOutSaleId(saleId);
       setIsCheckoutModalOpen(false);
       setIsCartOpen(false);
 
-      // Reset cart immediately on successful DB save
+      // Reset cart only after successful Supabase persistence
       setCart({});
 
       // Open WhatsApp to notify store owner
@@ -332,7 +321,7 @@ export default function CustomerView({
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Erro desconhecido ao registrar aquisição.';
       console.error('Erro ao processar aquisição:', e);
-      setOrderError(`Não foi possível registrar sua aquisição agora. Detalhe técnico: ${message}`);
+      setOrderError(`Não foi possível registrar sua aquisição no banco de dados. Sua aquisição ainda não apareceu no painel administrativo. Detalhe técnico: ${message}`);
     } finally {
       setIsSubmittingOrder(false);
     }
