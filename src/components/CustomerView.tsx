@@ -30,6 +30,7 @@ interface CustomerViewProps {
   onOpenScanner?: () => void;
   customerProfile?: any;
   onLogout?: () => void;
+  onCoreDataChanged?: () => Promise<void> | void;
 }
 
 export default function CustomerView({
@@ -39,7 +40,8 @@ export default function CustomerView({
   onTableChange,
   onOpenScanner,
   customerProfile,
-  onLogout
+  onLogout,
+  onCoreDataChanged
 }: CustomerViewProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -63,7 +65,7 @@ export default function CustomerView({
 
   // Only show products being offered (available)
   const offeredProducts = useMemo(() => {
-    return products.filter((p) => p.available === true);
+    return products.filter((p) => p.available === true && (p.stockAvailable ?? 0) > 0);
   }, [products]);
 
   // Extract categories dynamically from offered products
@@ -88,7 +90,22 @@ export default function CustomerView({
 
   // Cart operations
   const handleAddToCart = (id: string) => {
+    const product = products.find((p) => p.id === id);
+    const stockAvailable = product?.stockAvailable ?? 0;
+    const currentQuantity = cart[id] || 0;
+
     setCartNotice(null);
+
+    if (!product || product.available !== true || stockAvailable <= 0) {
+      setCartNotice('Este item não possui estoque disponível no momento.');
+      return;
+    }
+
+    if (currentQuantity >= stockAvailable) {
+      setCartNotice(`Estoque máximo atingido para ${product.name}: ${stockAvailable} unidade(s).`);
+      return;
+    }
+
     setCart((prev) => ({
       ...prev,
       [id]: (prev[id] || 0) + 1
@@ -323,6 +340,7 @@ export default function CustomerView({
       });
 
       setCheckedOutSaleId(saleId);
+      await onCoreDataChanged?.();
       setIsCheckoutModalOpen(false);
       setIsCartOpen(false);
 
@@ -558,6 +576,9 @@ export default function CustomerView({
                       <p className="text-zinc-500 text-xs leading-relaxed mt-1 line-clamp-2">
                         {product.description || 'Produto disponível na loja física do CIICC.'}
                       </p>
+                      <span className="inline-flex mt-2 px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-black uppercase tracking-wide">
+                        Disponível: {product.stockAvailable ?? 0}
+                      </span>
                     </div>
                   </div>
 
@@ -587,7 +608,8 @@ export default function CustomerView({
                         <button
                           id={`increase-qty-btn-${product.id}`}
                           onClick={() => handleAddToCart(product.id)}
-                          className="p-1 text-zinc-650 hover:text-amber-600 hover:bg-zinc-50 rounded-full transition-colors cursor-pointer"
+                          disabled={insideCartCount >= (product.stockAvailable ?? 0)}
+                          className="p-1 text-zinc-650 hover:text-amber-600 hover:bg-zinc-50 disabled:text-zinc-300 disabled:cursor-not-allowed rounded-full transition-colors cursor-pointer"
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </button>

@@ -65,6 +65,13 @@ type ProductRow = {
   emoji: string | null;
   image_url: string | null;
   available: boolean | null;
+  stock_initial: number | null;
+  stock_available: number | null;
+  cost_price: number | null;
+  lifecycle_type: string | null;
+  cycle_started_at: string | null;
+  cycle_closed_at: string | null;
+  cycle_unsold_quantity: number | null;
   sort_order: number | null;
 };
 
@@ -123,15 +130,24 @@ function requireSupabase() {
 }
 
 function toProductPayload(product: Omit<Product, 'id'> | Partial<Product>) {
-  return {
-    name: product.name,
-    description: product.description,
-    price: product.price,
-    category: product.category,
-    emoji: product.emoji,
-    image_url: product.imageUrl,
-    available: product.available,
-  };
+  const payload: Record<string, unknown> = {};
+
+  if (product.name !== undefined) payload.name = product.name;
+  if (product.description !== undefined) payload.description = product.description;
+  if (product.price !== undefined) payload.price = product.price;
+  if (product.category !== undefined) payload.category = product.category;
+  if (product.emoji !== undefined) payload.emoji = product.emoji;
+  if (product.imageUrl !== undefined) payload.image_url = product.imageUrl;
+  if (product.available !== undefined) payload.available = product.available;
+  if (product.stockInitial !== undefined) payload.stock_initial = product.stockInitial;
+  if (product.stockAvailable !== undefined) payload.stock_available = product.stockAvailable;
+  if (product.costPrice !== undefined) payload.cost_price = product.costPrice;
+  if (product.lifecycleType !== undefined) payload.lifecycle_type = product.lifecycleType;
+  if (product.cycleStartedAt !== undefined) payload.cycle_started_at = product.cycleStartedAt;
+  if (product.cycleClosedAt !== undefined) payload.cycle_closed_at = product.cycleClosedAt;
+  if (product.cycleUnsoldQuantity !== undefined) payload.cycle_unsold_quantity = product.cycleUnsoldQuantity;
+
+  return payload;
 }
 
 function mapProduct(row: ProductRow): Product {
@@ -144,6 +160,13 @@ function mapProduct(row: ProductRow): Product {
     emoji: row.emoji || '🍽️',
     imageUrl: row.image_url || '',
     available: row.available ?? true,
+    stockInitial: row.stock_initial ?? 0,
+    stockAvailable: row.stock_available ?? 0,
+    costPrice: row.cost_price ?? 0,
+    lifecycleType: row.lifecycle_type === 'same_day' ? 'same_day' : 'industrial',
+    cycleStartedAt: row.cycle_started_at,
+    cycleClosedAt: row.cycle_closed_at,
+    cycleUnsoldQuantity: row.cycle_unsold_quantity ?? 0,
   };
 }
 
@@ -201,7 +224,7 @@ export async function listSupabaseProducts(): Promise<Product[]> {
 
   const { data, error } = await client
     .from('products')
-    .select('id, name, description, price, category, emoji, image_url, available, sort_order')
+    .select('id, name, description, price, category, emoji, image_url, available, stock_initial, stock_available, cost_price, lifecycle_type, cycle_started_at, cycle_closed_at, cycle_unsold_quantity, sort_order')
     .order('sort_order', { ascending: true })
     .order('name', { ascending: true });
 
@@ -282,44 +305,34 @@ export async function upsertCustomerProfile(input: {
 export async function createSupabaseSale(input: SupabaseSaleInput): Promise<string> {
   const client = requireSupabase();
 
-  const { data: sale, error: saleError } = await client
-    .from('sales')
-    .insert({
-      customer_profile_id: input.customerProfile.id,
-      customer_name: input.customerProfile.displayName,
-      customer_email: input.customerProfile.email,
-      customer_workplace: input.customerProfile.workplace,
-      customer_shift_hours: input.customerProfile.shiftHours,
-      customer_photo_url: input.customerProfile.photoUrl,
-      total_amount: input.totalAmount,
-      payment_method: input.paymentMethod,
-      payment_proof_url: input.paymentProofUrl || null,
-    })
-    .select('id')
-    .single<{ id: string }>();
+  const { data: saleId, error } = await client.rpc('create_sale_with_stock', {
+    p_customer_profile_id: input.customerProfile.id,
+    p_customer_name: input.customerProfile.displayName,
+    p_customer_email: input.customerProfile.email,
+    p_customer_workplace: input.customerProfile.workplace,
+    p_customer_shift_hours: input.customerProfile.shiftHours,
+    p_customer_photo_url: input.customerProfile.photoUrl,
+    p_total_amount: input.totalAmount,
+    p_payment_method: input.paymentMethod,
+    p_payment_proof_url: input.paymentProofUrl || null,
+    p_items: input.items.map((item) => ({
+      product_id: item.productId,
+      name: item.name,
+      quantity: item.quantity,
+      price: item.price,
+      emoji: item.emoji || '🍽️',
+    })),
+  });
 
-  if (saleError) {
-    throw saleError;
+  if (error) {
+    throw error;
   }
 
-  const saleItems = input.items.map((item) => ({
-    sale_id: sale.id,
-    product_id: item.productId,
-    name: item.name,
-    quantity: item.quantity,
-    price: item.price,
-    emoji: item.emoji || '🍽️',
-  }));
-
-  const { error: itemsError } = await client
-    .from('sale_items')
-    .insert(saleItems);
-
-  if (itemsError) {
-    throw itemsError;
+  if (!saleId) {
+    throw new Error('Aquisição registrada sem identificador de retorno.');
   }
 
-  return sale.id;
+  return String(saleId);
 }
 
 

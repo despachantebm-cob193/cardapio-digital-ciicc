@@ -6,12 +6,21 @@ export interface StoreSetting {
   updatedAt?: string;
 }
 
+export type ProductLifecycleType = 'same_day' | 'industrial';
+
 export interface Product {
   id: string;
   name: string;
   description: string;
   price: number;
   available: boolean;
+  stockInitial?: number;
+  stockAvailable?: number;
+  costPrice?: number;
+  lifecycleType?: ProductLifecycleType;
+  cycleStartedAt?: string | null;
+  cycleClosedAt?: string | null;
+  cycleUnsoldQuantity?: number;
   category: string;
   emoji: string;
   imageUrl?: string;

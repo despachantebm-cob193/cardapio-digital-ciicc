@@ -71,9 +71,12 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
   const [formName, setFormName] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formPrice, setFormPrice] = useState('');
+  const [formCostPrice, setFormCostPrice] = useState('');
+  const [formLifecycleType, setFormLifecycleType] = useState<'same_day' | 'industrial'>('same_day');
   const [formCategory, setFormCategory] = useState(CATEGORIES[0]);
   const [formEmoji, setFormEmoji] = useState('🍔');
   const [formImageUrl, setFormImageUrl] = useState('');
+  const [formStockQuantity, setFormStockQuantity] = useState('');
   const [formAvailable, setFormAvailable] = useState(true);
   const [productSubmitLoading, setProductSubmitLoading] = useState(false);
 
@@ -167,9 +170,12 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
     setFormName('');
     setFormDescription('');
     setFormPrice('');
+    setFormCostPrice('');
+    setFormLifecycleType('same_day');
     setFormCategory(CATEGORIES[0]);
     setFormEmoji('🍔');
     setFormImageUrl('');
+    setFormStockQuantity('');
     setFormAvailable(true);
     setIsProductModalOpen(true);
   };
@@ -179,9 +185,12 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
     setFormName(product.name);
     setFormDescription(product.description);
     setFormPrice(product.price.toString());
+    setFormCostPrice(String(product.costPrice ?? 0));
+    setFormLifecycleType(product.lifecycleType === 'same_day' ? 'same_day' : 'industrial');
     setFormCategory(product.category);
     setFormEmoji(product.emoji || '🍔');
     setFormImageUrl(product.imageUrl || '');
+    setFormStockQuantity(String(product.stockAvailable ?? 0));
     setFormAvailable(product.available);
     setIsProductModalOpen(true);
   };
@@ -208,7 +217,19 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
 
     const priceNum = parseFloat(formPrice.replace(',', '.'));
     if (isNaN(priceNum) || priceNum < 0) {
-      showAdminNotice('error', 'Insira um preço válido maior ou igual a zero.');
+      showAdminNotice('error', 'Insira um valor de venda válido maior ou igual a zero.');
+      return;
+    }
+
+    const costPriceNum = parseFloat(formCostPrice.replace(',', '.'));
+    if (isNaN(costPriceNum) || costPriceNum < 0) {
+      showAdminNotice('error', 'Informe um custo unitário válido maior ou igual a zero.');
+      return;
+    }
+
+    const stockQuantity = Number.parseInt(formStockQuantity, 10);
+    if (!Number.isInteger(stockQuantity) || stockQuantity < 0) {
+      showAdminNotice('error', 'Informe uma quantidade de estoque válida maior ou igual a zero.');
       return;
     }
 
@@ -218,7 +239,14 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
         name: formName,
         description: formDescription,
         price: priceNum,
-        available: formAvailable,
+        available: formAvailable && stockQuantity > 0,
+        stockInitial: stockQuantity,
+        stockAvailable: stockQuantity,
+        costPrice: costPriceNum,
+        lifecycleType: formLifecycleType,
+        cycleStartedAt: new Date().toISOString(),
+        cycleClosedAt: null,
+        cycleUnsoldQuantity: 0,
         category: formCategory,
         emoji: formEmoji,
         imageUrl: formImageUrl || undefined
@@ -238,6 +266,154 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
       showAdminNotice('error', 'Falha ao salvar produto no Supabase. Verifique sua sessão e permissão administrativa.');
     } finally {
       setProductSubmitLoading(false);
+    }
+  };
+
+  const formatAdminDateTime = (value?: string | null) => {
+    if (!value) {
+      return 'Não informado';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return 'Data inválida';
+    }
+
+    return new Intl.DateTimeFormat('pt-BR', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(date);
+  };
+
+  const getCycleResultTone = (product: Product) => {
+    const result = getCycleResult(product).result;
+
+    if (product.lifecycleType === 'industrial' && (product.stockAvailable ?? 0) <= 0) {
+      return 'blue';
+    }
+
+    if (result > 0) {
+      return 'green';
+    }
+
+    if (result < 0) {
+      return 'red';
+    }
+
+    return 'amber';
+  };
+
+  const getCycleResultClassName = (product: Product) => {
+    const tone = getCycleResultTone(product);
+
+    if (tone === 'blue') {
+      return 'bg-blue-50 text-blue-700 border-blue-200 ring-2 ring-blue-100';
+    }
+
+    if (tone === 'green') {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 ring-2 ring-emerald-100';
+    }
+
+    if (tone === 'red') {
+      return 'bg-red-50 text-red-700 border-red-200 ring-2 ring-red-100';
+    }
+
+    return 'bg-amber-50 text-amber-700 border-amber-200 ring-2 ring-amber-100';
+  };
+
+  const getCycleResultLabel = (product: Product) => {
+    if (product.lifecycleType === 'industrial' && (product.stockAvailable ?? 0) <= 0) {
+      return 'Estoque zerado';
+    }
+
+    return 'Resultado';
+  };
+
+  const formatAdminCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(value || 0);
+  };
+
+  const getCycleSoldQuantity = (product: Product) => {
+    const initial = product.stockInitial ?? 0;
+    if (product.cycleClosedAt) {
+      return Math.max(0, initial - (product.cycleUnsoldQuantity ?? 0));
+    }
+
+    return Math.max(0, initial - (product.stockAvailable ?? 0));
+  };
+
+  const getCycleUnsoldQuantity = (product: Product) => {
+    if (product.cycleClosedAt) {
+      return product.cycleUnsoldQuantity ?? 0;
+    }
+
+    return product.stockAvailable ?? 0;
+  };
+
+  const getCycleResult = (product: Product) => {
+    const sold = getCycleSoldQuantity(product);
+    const unsold = getCycleUnsoldQuantity(product);
+    const saleRevenue = sold * product.price;
+    const producedCost = (product.stockInitial ?? 0) * (product.costPrice ?? 0);
+    const soldCost = sold * (product.costPrice ?? 0);
+
+    if (product.lifecycleType === 'same_day') {
+      const unitMargin = product.price - (product.costPrice ?? 0);
+      const adjustedQuantity = sold - unsold;
+
+      return {
+        sold,
+        unsold,
+        revenue: saleRevenue,
+        cost: producedCost,
+        result: adjustedQuantity * unitMargin,
+      };
+    }
+
+    return {
+      sold,
+      unsold,
+      revenue: saleRevenue,
+      cost: soldCost,
+      result: saleRevenue - soldCost,
+    };
+  };
+
+  const handleCloseProductCycle = async (product: Product) => {
+    const initial = product.stockInitial ?? 0;
+    const currentAvailable = product.stockAvailable ?? 0;
+    const rawUnsold = window.prompt(
+      `Informe a quantidade não vendida de "${product.name}".\nQuantidade atual disponível no sistema: ${currentAvailable}`,
+      String(currentAvailable)
+    );
+
+    if (rawUnsold === null) {
+      return;
+    }
+
+    const unsoldQuantity = Number.parseInt(rawUnsold, 10);
+
+    if (!Number.isInteger(unsoldQuantity) || unsoldQuantity < 0 || unsoldQuantity > initial) {
+      showAdminNotice('error', 'Quantidade não vendida inválida. Informe um número entre 0 e a quantidade inicial do lote.');
+      return;
+    }
+
+    try {
+      await updateSupabaseProduct(product.id, {
+        available: false,
+        stockAvailable: 0,
+        cycleClosedAt: new Date().toISOString(),
+        cycleUnsoldQuantity: unsoldQuantity,
+      });
+      await notifyCoreDataChanged();
+      showAdminNotice('success', 'Ciclo encerrado. Produto removido do cardápio e sobra registrada.');
+    } catch (err) {
+      console.error('Falha ao encerrar ciclo do produto:', err);
+      showAdminNotice('error', 'Erro ao encerrar ciclo. Verifique sua permissão administrativa no Supabase.');
     }
   };
 
@@ -419,12 +595,12 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                   </button>
                 )}
                 <button
-                  id="add-product-btn"
-                  onClick={handleOpenAddModal}
-                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 transition-transform active:scale-95 shadow-sm shadow-amber-500/10"
+                  id="go-to-batches-btn"
+                  onClick={() => setActiveTab('batches')}
+                  className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-xs rounded-xl cursor-pointer flex items-center gap-1.5 transition-transform active:scale-95 shadow-sm"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Novo Produto</span>
+                  <PackageCheck className="w-4 h-4" />
+                  <span>Adicionar no Controle de Lotes</span>
                 </button>
               </div>
             </div>
@@ -489,6 +665,18 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                             <ToggleLeft className="w-8 h-8 text-zinc-300 cursor-pointer" />
                           )}
                         </button>
+                      </div>
+
+                      <div className="flex flex-col items-end gap-1">
+                        <span className="text-[10px] uppercase font-bold text-zinc-400 tracking-wider">
+                          Estoque
+                        </span>
+                        <span
+                          id={`admin-product-stock-badge-${product.id}`}
+                          className="px-2 py-1 rounded-full bg-zinc-50 border border-zinc-150 text-[10px] font-black text-zinc-650"
+                        >
+                          {product.stockAvailable ?? 0}
+                        </span>
                       </div>
 
                       {/* Line Controls Button */}
@@ -1010,34 +1198,192 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
           )}
         </AnimatePresence>
 
-        {/* TAB 5: Product batch control is outside the current Supabase schema. */}
+        {/* TAB 5: Product stock and batch control */}
         {activeTab === 'batches' && (
-          <div className="bg-white border border-zinc-150 rounded-3xl p-8 text-center">
-            <PackageCheck className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
-            <h3 className="font-display font-semibold text-lg text-zinc-900">
-              Controle de Lotes indisponível nesta etapa
-            </h3>
-            <p className="text-zinc-500 text-xs mt-2 max-w-md mx-auto leading-relaxed">
-              Esta função ficou fora do escopo da migração Supabase atual porque ainda não há tabela Supabase correspondente para lotes. Nenhuma operação legada de lote permanece ativa.
-            </p>
+          <div className="space-y-5">
+            <div className="bg-white border border-zinc-150 rounded-3xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] uppercase tracking-wider font-black text-amber-600">
+                  Controle de estoque
+                </span>
+                <h3 className="font-display font-semibold text-lg text-zinc-900">
+                  Controle de Lotes
+                </h3>
+                <p className="text-zinc-500 text-xs mt-1 max-w-xl leading-relaxed">
+                  Cadastre produtos e informe a quantidade total disponível. O cardápio exibe somente itens marcados como disponíveis e com estoque maior que zero.
+                </p>
+              </div>
+
+              <button
+                id="add-batch-product-btn"
+                onClick={handleOpenAddModal}
+                className="px-4 py-3 bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black text-xs rounded-2xl cursor-pointer flex items-center justify-center gap-2 transition-transform active:scale-95 shadow-sm shadow-amber-500/20"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Adicionar Produto/Lote</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white border border-zinc-150 rounded-3xl p-5">
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                  Produtos cadastrados
+                </span>
+                <h4 className="font-mono font-black text-2xl text-zinc-900 mt-1">
+                  {products.length}
+                </h4>
+              </div>
+
+              <div className="bg-white border border-zinc-150 rounded-3xl p-5">
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                  Estoque disponível
+                </span>
+                <h4 className="font-mono font-black text-2xl text-emerald-600 mt-1">
+                  {products.reduce((acc, product) => acc + (product.stockAvailable ?? 0), 0)}
+                </h4>
+              </div>
+
+              <div className="bg-white border border-zinc-150 rounded-3xl p-5">
+                <span className="text-[10px] text-zinc-400 font-bold uppercase tracking-wider">
+                  No cardápio
+                </span>
+                <h4 className="font-mono font-black text-2xl text-amber-600 mt-1">
+                  {products.filter((product) => product.available && (product.stockAvailable ?? 0) > 0).length}
+                </h4>
+              </div>
+            </div>
+
+            {products.length === 0 ? (
+              <div className="bg-white border border-dashed border-zinc-250 rounded-3xl p-10 text-center">
+                <PackageCheck className="w-10 h-10 text-zinc-300 mx-auto mb-3" />
+                <h4 className="font-display font-semibold text-zinc-900">
+                  Nenhum lote cadastrado
+                </h4>
+                <p className="text-zinc-500 text-xs mt-2">
+                  Clique em "Adicionar Produto/Lote" para criar o primeiro item do cardápio com quantidade disponível.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {products.map((product) => {
+                  const stockAvailable = product.stockAvailable ?? 0;
+
+                  const industrialStockClassName =
+
+                    product.lifecycleType === 'industrial' && stockAvailable <= 0
+
+                      ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-100 shadow-blue-100'
+
+                      : '';
+                  const isOffered = product.available && stockAvailable > 0;
+
+                  return (
+                    <div
+                      key={product.id}
+                      id={`stock-row-${product.id}`}
+                      className={`bg-white border border-zinc-150 rounded-3xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${industrialStockClassName}`}
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-12 h-12 rounded-2xl bg-zinc-50 border border-zinc-150 flex items-center justify-center text-2xl shrink-0">
+                          {product.emoji || '🍽️'}
+                        </div>
+
+                        <div className="min-w-0">
+                          <span className="text-[10px] uppercase tracking-wider font-black text-amber-600">
+                            {product.category}
+                          </span>
+                          <h4 className="font-display font-black text-zinc-900 text-sm truncate">
+                            {product.name}
+                          </h4>
+                          <p className="text-[11px] text-zinc-500 truncate">
+                            Venda: {formatAdminCurrency(product.price)} • Custo: {formatAdminCurrency(product.costPrice ?? 0)}
+                          </p>
+                          <p className="text-[10px] text-zinc-400 truncate">
+                            Tipo: {product.lifecycleType === 'same_day' ? 'Consumo no dia' : 'Industrializado'}
+                          </p>
+                          <p className="text-[10px] text-zinc-500 truncate">
+                            Ciclo iniciado: {formatAdminDateTime(product.cycleStartedAt)}
+                          </p>
+                          <p className="text-[10px] text-zinc-500 truncate">
+                            {product.cycleClosedAt
+                              ? `Ciclo encerrado: ${formatAdminDateTime(product.cycleClosedAt)}`
+                              : 'Ciclo em aberto'}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <span className="px-3 py-1 rounded-full text-[10px] font-black border border-zinc-200 bg-zinc-50 text-zinc-700">
+                          Estoque inicial: {product.stockInitial ?? 0}
+                        </span>
+
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${
+                          product.lifecycleType === 'industrial' && stockAvailable <= 0
+                            ? 'border-blue-200 bg-blue-50 text-blue-700 ring-2 ring-blue-100'
+                            : stockAvailable > 0
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : 'border-amber-200 bg-amber-50 text-amber-700'
+                        }`}>
+                          Estoque atual: {stockAvailable}
+                        </span>
+
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black border ${getCycleResultClassName(product)}`}>
+                          {getCycleResultLabel(product)}: {formatAdminCurrency(getCycleResult(product).result)}
+                        </span>
+
+                        <button
+                          id={`edit-stock-btn-${product.id}`}
+                          onClick={() => handleOpenEditModal(product)}
+                          className="px-3 py-1.5 rounded-xl border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 text-[11px] font-bold flex items-center gap-1"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          Ajustar
+                        </button>
+
+                        {product.lifecycleType === 'same_day' && !product.cycleClosedAt && (
+                          <button
+                            id={`close-cycle-btn-${product.id}`}
+                            onClick={() => handleCloseProductCycle(product)}
+                            className="px-3 py-1.5 rounded-xl border border-amber-100 bg-white hover:bg-amber-50 text-amber-700 text-[11px] font-bold flex items-center gap-1"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Encerrar ciclo
+                          </button>
+                        )}
+
+                        <button
+                          id={`delete-stock-btn-${product.id}`}
+                          onClick={() => handleProductDelete(product.id)}
+                          className="px-3 py-1.5 rounded-xl border border-red-100 bg-white hover:bg-red-50 text-red-600 text-[11px] font-bold flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          Excluir
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
+
       </div>
 
       {/* MODAL: Add/Edit Product popup */}
       <AnimatePresence>
         {isProductModalOpen && (
-          <div id="product-form-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div id="product-form-modal" className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl border border-zinc-100"
+              className="w-full sm:max-w-lg h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-2rem)] bg-white rounded-none sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col"
             >
               {/* Modal Head */}
-              <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-100">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100 bg-white shrink-0">
                 <h3 className="font-display font-bold text-lg text-zinc-900">
-                  {editingProduct ? 'Editar Produto' : 'Cadastrar Novo Produto'}
+                  {editingProduct ? 'Ajustar Produto/Lote' : 'Cadastrar Produto/Lote'}
                 </h3>
                 <button
                   id="close-product-modal-btn"
@@ -1049,7 +1395,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
               </div>
 
               {/* Form Input fields */}
-              <form onSubmit={handleProductFormSubmit} className="p-6 space-y-4">
+              <form onSubmit={handleProductFormSubmit} className="px-6 py-5 space-y-3 overflow-y-auto flex-1 min-h-0 overscroll-contain">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-xs font-semibold text-zinc-600 mb-1">
@@ -1062,11 +1408,29 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                       onChange={(e) => setFormName(e.target.value)}
                       placeholder="Ex: X-Picanha Cheddar"
                       required
-                      className="w-full px-3.5 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-none transition-all"
+                      className="w-full px-3.5 py-2 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-800 outline-none transition-all"
                     />
                   </div>
 
                   <div>
+                  <label className="block text-xs font-semibold text-zinc-600 mb-1">
+                    Tipo de produto *
+                  </label>
+                  <select
+                    id="form-product-lifecycle-type"
+                    value={formLifecycleType}
+                    onChange={(e) => setFormLifecycleType(e.target.value as 'same_day' | 'industrial')}
+                    className="w-full px-3.5 py-2 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-850 outline-none transition-all"
+                  >
+                    <option value="same_day">Consumo no dia / perecível</option>
+                    <option value="industrial">Industrializado / validade maior</option>
+                  </select>
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Perecíveis podem ser encerrados no fim do dia com sobra informada.
+                  </p>
+                </div>
+
+                <div>
                     <label className="block text-xs font-semibold text-zinc-600 mb-1">
                       Categoria *
                     </label>
@@ -1074,7 +1438,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                       id="form-product-category"
                       value={formCategory}
                       onChange={(e) => setFormCategory(e.target.value)}
-                      className="w-full px-3.5 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-850 outline-none transition-all select-none"
+                      className="w-full px-3.5 py-2 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-850 outline-none transition-all select-none"
                     >
                       {CATEGORIES.map((cat) => (
                         <option key={cat} value={cat}>
@@ -1095,14 +1459,39 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                     onChange={(e) => setFormDescription(e.target.value)}
                     placeholder="Descreva os ingredientes, tamanho ou detalhes do produto..."
                     rows={2}
-                    className="w-full px-3.5 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-805 outline-none transition-all resize-none"
+                    className="w-full px-3.5 py-2 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-805 outline-none transition-all resize-none"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
+                  <label className="block text-xs font-semibold text-zinc-600 mb-1">
+                    Custo unitário (R$) *
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 text-xs font-bold">
+                      R$
+                    </span>
+                    <input
+                      id="form-product-cost-price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formCostPrice}
+                      onChange={(e) => setFormCostPrice(e.target.value)}
+                      placeholder="0,00"
+                      required
+                      className="w-full pl-9 pr-3 py-2.5 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-850 outline-none transition-all font-mono"
+                    />
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Usado para calcular lucro, perda e sobra do ciclo.
+                  </p>
+                </div>
+
+                <div>
                     <label className="block text-xs font-semibold text-zinc-600 mb-1">
-                      Preço (R$) *
+                      Valor de venda (R$) *
                     </label>
                     <div className="relative">
                       <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-medium text-xs">
@@ -1155,6 +1544,26 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
 
                 <div>
                   <label className="block text-xs font-semibold text-zinc-600 mb-1">
+                    Quantidade disponível no lote *
+                  </label>
+                  <input
+                    id="form-product-stock"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formStockQuantity}
+                    onChange={(e) => setFormStockQuantity(e.target.value)}
+                    placeholder="Ex: 20"
+                    required
+                    className="w-full px-3.5 py-2 text-sm bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-xl text-zinc-850 outline-none transition-all font-mono"
+                  />
+                  <p className="text-[10px] text-zinc-500 mt-1">
+                    Ao vender, o sistema baixa automaticamente esta quantidade.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-zinc-600 mb-1">
                     URL da Imagem de Fundo (Opcional)
                   </label>
                   <input
@@ -1192,7 +1601,7 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
                 </div>
 
                 {/* Save controls */}
-                <div className="flex gap-2 pt-2">
+                <div className="modal-product-actions-sticky sticky bottom-0 -mx-6 -mb-5 mt-2 px-6 py-4 bg-white border-t border-zinc-100 flex gap-3 shrink-0">
                   <button
                     type="button"
                     onClick={() => setIsProductModalOpen(false)}
