@@ -294,63 +294,109 @@ export default function AdminPanel({ products, settings, onCoreDataChanged }: Ad
         </div>
       )}
 
-      {/* Tabs list bar */}
-      <div className="flex border-b border-zinc-150 mb-7">
-        <button
-          id="tab-products-btn"
-          onClick={() => setActiveTab('products')}
-          className={`flex-1 py-3 text-center text-sm font-medium border-b-2 transition-all cursor-pointer ${
-            activeTab === 'products'
-              ? 'border-amber-500 text-amber-600 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-800'
-          }`}
-        >
-          Meus Produtos ({products.length})
-        </button>
-        <button
-          id="tab-settings-btn"
-          onClick={() => setActiveTab('settings')}
-          className={`flex-1 py-3 text-center text-xs sm:text-sm font-medium border-b-2 transition-all cursor-pointer ${
-            activeTab === 'settings'
-              ? 'border-amber-500 text-amber-600 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-800'
-          }`}
-        >
-          PIX & WhatsApp Administrativo
-        </button>
-        <button
-          id="tab-store-guidance-btn"
-          onClick={() => setActiveTab('guidance')}
-          className={`flex-1 py-3 text-center text-xs sm:text-sm font-medium border-b-2 transition-all cursor-pointer ${
-            activeTab === 'guidance'
-              ? 'border-amber-500 text-amber-600 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-800'
-          }`}
-        >
-          Orientações da Loja
-        </button>
-        <button
-          id="tab-sales-btn"
-          onClick={() => setActiveTab('sales')}
-          className={`flex-1 py-3 text-center text-xs sm:text-sm font-medium border-b-2 transition-all cursor-pointer ${
-            activeTab === 'sales'
-              ? 'border-amber-500 text-amber-600 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-800'
-          }`}
-        >
-          Vendas e Acertos 📊
-        </button>
-        <button
-          id="tab-batches-btn"
-          onClick={() => setActiveTab('batches')}
-          className={`flex-1 py-3 text-center text-xs sm:text-sm font-medium border-b-2 transition-all cursor-pointer ${
-            activeTab === 'batches'
-              ? 'border-amber-500 text-amber-600 font-semibold'
-              : 'border-transparent text-zinc-500 hover:text-zinc-800'
-          }`}
-        >
-          Controle de Lotes 📦
-        </button>
+      {/* Tabs carousel bar */}
+      <div className="mb-7">
+        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-3 -mx-1 px-1 scrollbar-thin">
+          <button
+            id="tab-products-btn"
+            onClick={() => setActiveTab('products')}
+            className={`min-w-[152px] sm:min-w-[170px] snap-start rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer shadow-sm ${
+              activeTab === 'products'
+                ? 'bg-amber-500 border-amber-500 text-zinc-950 shadow-amber-500/20 scale-[1.01]'
+                : 'bg-white border-zinc-200 text-zinc-650 hover:border-amber-300 hover:bg-amber-50'
+            }`}
+          >
+            <span className="block text-[10px] font-black uppercase tracking-wider opacity-70">
+              Cardápio
+            </span>
+            <span className="block text-sm font-black leading-tight">
+              Meus Produtos
+            </span>
+            <span className="block text-[11px] font-bold opacity-75 mt-0.5">
+              {products.length} itens
+            </span>
+          </button>
+
+          <button
+            id="tab-settings-btn"
+            onClick={() => setActiveTab('settings')}
+            className={`min-w-[152px] sm:min-w-[170px] snap-start rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer shadow-sm ${
+              activeTab === 'settings'
+                ? 'bg-amber-500 border-amber-500 text-zinc-950 shadow-amber-500/20 scale-[1.01]'
+                : 'bg-white border-zinc-200 text-zinc-650 hover:border-amber-300 hover:bg-amber-50'
+            }`}
+          >
+            <span className="block text-[10px] font-black uppercase tracking-wider opacity-70">
+              Pagamento
+            </span>
+            <span className="block text-sm font-black leading-tight">
+              PIX & WhatsApp
+            </span>
+            <span className="block text-[11px] font-bold opacity-75 mt-0.5">
+              Administrativo
+            </span>
+          </button>
+
+          <button
+            id="tab-store-guidance-btn"
+            onClick={() => setActiveTab('guidance')}
+            className={`min-w-[152px] sm:min-w-[170px] snap-start rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer shadow-sm ${
+              activeTab === 'guidance'
+                ? 'bg-amber-500 border-amber-500 text-zinc-950 shadow-amber-500/20 scale-[1.01]'
+                : 'bg-white border-zinc-200 text-zinc-650 hover:border-amber-300 hover:bg-amber-50'
+            }`}
+          >
+            <span className="block text-[10px] font-black uppercase tracking-wider opacity-70">
+              Loja
+            </span>
+            <span className="block text-sm font-black leading-tight">
+              Orientações
+            </span>
+            <span className="block text-[11px] font-bold opacity-75 mt-0.5">
+              Regras e acesso
+            </span>
+          </button>
+
+          <button
+            id="tab-sales-btn"
+            onClick={() => setActiveTab('sales')}
+            className={`min-w-[152px] sm:min-w-[170px] snap-start rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer shadow-sm ${
+              activeTab === 'sales'
+                ? 'bg-amber-500 border-amber-500 text-zinc-950 shadow-amber-500/20 scale-[1.01]'
+                : 'bg-white border-zinc-200 text-zinc-650 hover:border-amber-300 hover:bg-amber-50'
+            }`}
+          >
+            <span className="block text-[10px] font-black uppercase tracking-wider opacity-70">
+              Financeiro
+            </span>
+            <span className="block text-sm font-black leading-tight">
+              Vendas e Acertos
+            </span>
+            <span className="block text-[11px] font-bold opacity-75 mt-0.5">
+              Painel de controle
+            </span>
+          </button>
+
+          <button
+            id="tab-batches-btn"
+            onClick={() => setActiveTab('batches')}
+            className={`min-w-[152px] sm:min-w-[170px] snap-start rounded-2xl border px-4 py-3 text-left transition-all cursor-pointer shadow-sm ${
+              activeTab === 'batches'
+                ? 'bg-amber-500 border-amber-500 text-zinc-950 shadow-amber-500/20 scale-[1.01]'
+                : 'bg-white border-zinc-200 text-zinc-650 hover:border-amber-300 hover:bg-amber-50'
+            }`}
+          >
+            <span className="block text-[10px] font-black uppercase tracking-wider opacity-70">
+              Estoque
+            </span>
+            <span className="block text-sm font-black leading-tight">
+              Controle de Lotes
+            </span>
+            <span className="block text-[11px] font-bold opacity-75 mt-0.5">
+              Produtos físicos
+            </span>
+          </button>
+        </div>
       </div>
 
       {/* Active Content Components */}
